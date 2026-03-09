@@ -63,6 +63,36 @@ server.tool(
 );
 
 server.tool(
+  'send_file',
+  "Send an image file to the user. Use this after generating a chart or image (e.g. summary.png). The file must be inside /workspace/.",
+  {
+    filePath: z.string().describe('Absolute container path to the file, e.g. "/workspace/group/summary.png"'),
+    caption: z.string().optional().describe('Optional caption sent as a text message after the image'),
+    mimeType: z.string().optional().describe('MIME type hint, e.g. "image/png". Auto-detected from extension if omitted.'),
+  },
+  async (args) => {
+    if (!args.filePath.startsWith('/workspace/')) {
+      return {
+        content: [{ type: 'text' as const, text: 'filePath must be inside /workspace/.' }],
+        isError: true,
+      };
+    }
+
+    writeIpcFile(MESSAGES_DIR, {
+      type: 'file',
+      chatJid,
+      containerPath: args.filePath,
+      caption: args.caption || undefined,
+      mimeType: args.mimeType || undefined,
+      groupFolder,
+      timestamp: new Date().toISOString(),
+    });
+
+    return { content: [{ type: 'text' as const, text: 'File queued for delivery.' }] };
+  },
+);
+
+server.tool(
   'schedule_task',
   `Schedule a recurring or one-time task. The task will run as a full agent with access to all tools.
 

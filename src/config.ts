@@ -6,7 +6,11 @@ import { readEnvFile } from './env.js';
 // Read config values from .env (falls back to process.env).
 // Secrets are NOT read here — they stay on disk and are loaded only
 // where needed (container-runner.ts) to avoid leaking to child processes.
-const envConfig = readEnvFile(['ASSISTANT_NAME', 'ASSISTANT_HAS_OWN_NUMBER']);
+const envConfig = readEnvFile([
+  'ASSISTANT_NAME',
+  'ASSISTANT_HAS_OWN_NUMBER',
+  'LINE_IMAGE_PUBLIC_BASE_URL',
+]);
 
 export const ASSISTANT_NAME =
   process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'Andy';
@@ -57,6 +61,12 @@ export const TRIGGER_PATTERN = new RegExp(
   `^@${escapeRegex(ASSISTANT_NAME)}\\b`,
   'i',
 );
+
+// Public HTTPS base URL for serving image files to LINE (e.g. ngrok URL)
+// Must point to the same server as LINE_WEBHOOK_PORT (port 3000)
+// Example: "https://abc123.ngrok-free.app"
+export const LINE_IMAGE_PUBLIC_BASE_URL =
+  process.env.LINE_IMAGE_PUBLIC_BASE_URL || envConfig.LINE_IMAGE_PUBLIC_BASE_URL || '';
 
 // Timezone for scheduled tasks (cron expressions, etc.)
 // Uses system timezone by default

@@ -23,14 +23,28 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     curl \
     git \
+    python3 \
+    python3-matplotlib \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install agent-browser and claude-code globally
-RUN npm install -g agent-browser @anthropic-ai/claude-code
+# Install agent-browser, claude-code, and xlsx (SheetJS) globally
+RUN npm install -g agent-browser @anthropic-ai/claude-code xlsx
+
+# Install append-sales tool
+COPY append-sales.js /usr/local/bin/append-sales
+RUN chmod +x /usr/local/bin/append-sales
+
+# Install update-sales-ledger tool
+COPY update-sales-ledger.js /usr/local/bin/update-sales-ledger
+RUN chmod +x /usr/local/bin/update-sales-ledger
+
+# Install clear-user-data tool
+COPY clear-user-data.js /usr/local/bin/clear-user-data
+RUN chmod +x /usr/local/bin/clear-user-data
 
 # Create app directory
 WORKDIR /app

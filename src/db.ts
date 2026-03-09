@@ -429,6 +429,15 @@ export function deleteTask(id: string): void {
   db.prepare('DELETE FROM scheduled_tasks WHERE id = ?').run(id);
 }
 
+/**
+ * Delete all messages for a given chatJid.
+ * Used by the clear_user_data IPC command.
+ */
+export function clearChatData(chatJid: string): { messagesDeleted: number } {
+  const result = db.prepare('DELETE FROM messages WHERE chat_jid = ?').run(chatJid);
+  return { messagesDeleted: result.changes };
+}
+
 export function getDueTasks(): ScheduledTask[] {
   const now = new Date().toISOString();
   return db

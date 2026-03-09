@@ -8,7 +8,7 @@ import {
   POLL_INTERVAL,
   TRIGGER_PATTERN,
 } from './config.js';
-import { WhatsAppChannel } from './channels/whatsapp.js';
+import { LineChannel } from './channels/line.js';
 import {
   ContainerOutput,
   runContainerAgent,
@@ -51,7 +51,6 @@ let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
 
-let whatsapp: WhatsAppChannel;
 const channels: Channel[] = [];
 const queue = new GroupQueue();
 
@@ -475,9 +474,9 @@ async function main(): Promise<void> {
   };
 
   // Create and connect channels
-  whatsapp = new WhatsAppChannel(channelOpts);
-  channels.push(whatsapp);
-  await whatsapp.connect();
+  const line = new LineChannel(channelOpts);
+  channels.push(line);
+  await line.connect();
 
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({
@@ -502,10 +501,21 @@ async function main(): Promise<void> {
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
       return channel.sendMessage(jid, text);
     },
+    sendFile: async (jid, hostPath, caption, mimeType) => {
+      const channel = findChannel(channels, jid);
+      if (!channel) {
+        logger.warn({ jid }, 'No channel found for sendFile');
+        return;
+      }
+      if (!channel.sendFile) {
+        logger.warn({ jid, channel: channel.name }, 'Channel does not support sendFile');
+        return;
+      }
+      return channel.sendFile(jid, hostPath, caption, mimeType);
+    },
     registeredGroups: () => registeredGroups,
     registerGroup,
-    syncGroupMetadata: (force) =>
-      whatsapp?.syncGroupMetadata(force) ?? Promise.resolve(),
+    syncGroupMetadata: () => Promise.resolve(), // LINE delivers group info via webhook events
     getAvailableGroups,
     writeGroupsSnapshot: (gf, im, ag, rj) =>
       writeGroupsSnapshot(gf, im, ag, rj),
