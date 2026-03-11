@@ -125,6 +125,9 @@ function buildVolumeMounts(
             // Enable Claude's memory feature (persists user preferences between sessions)
             // https://code.claude.com/docs/en/memory#manage-auto-memory
             CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
+            // Enable prompt caching for CLAUDE.md to reduce token costs on repeated requests
+            // Caches system context (CLAUDE.md) across multiple queries, paying full price only once
+            CLAUDE_CODE_ENABLE_PROMPT_CACHING: '1',
           },
         },
         null,
