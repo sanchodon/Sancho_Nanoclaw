@@ -508,7 +508,10 @@ async function main(): Promise<void> {
         return;
       }
       if (!channel.sendFile) {
-        logger.warn({ jid, channel: channel.name }, 'Channel does not support sendFile');
+        logger.warn(
+          { jid, channel: channel.name },
+          'Channel does not support sendFile',
+        );
         return;
       }
       return channel.sendFile(jid, hostPath, caption, mimeType);

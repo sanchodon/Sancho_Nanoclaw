@@ -434,7 +434,9 @@ export function deleteTask(id: string): void {
  * Used by the clear_user_data IPC command.
  */
 export function clearChatData(chatJid: string): { messagesDeleted: number } {
-  const result = db.prepare('DELETE FROM messages WHERE chat_jid = ?').run(chatJid);
+  const result = db
+    .prepare('DELETE FROM messages WHERE chat_jid = ?')
+    .run(chatJid);
   return { messagesDeleted: result.changes };
 }
 

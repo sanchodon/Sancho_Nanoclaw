@@ -158,10 +158,15 @@ export class LineChannel implements Channel {
       const res = await fetch('http://localhost:4040/api/tunnels');
       if (!res.ok) return;
       const data = (await res.json()) as { tunnels: { public_url: string }[] };
-      const httpsUrl = data.tunnels?.find((t) => t.public_url.startsWith('https://'))?.public_url;
+      const httpsUrl = data.tunnels?.find((t) =>
+        t.public_url.startsWith('https://'),
+      )?.public_url;
       if (httpsUrl) {
         this.imageBaseUrl = httpsUrl;
-        logger.info({ imageBaseUrl: httpsUrl }, 'Auto-detected ngrok URL for LINE image serving');
+        logger.info(
+          { imageBaseUrl: httpsUrl },
+          'Auto-detected ngrok URL for LINE image serving',
+        );
       }
     } catch {
       // ngrok not running — imageBaseUrl stays empty, sendFile will warn
@@ -172,7 +177,11 @@ export class LineChannel implements Channel {
     for (const event of body.events) {
       // Log every event unconditionally for debugging
       logger.info(
-        { type: event.type, source: event.source, webhookEventId: event.webhookEventId },
+        {
+          type: event.type,
+          source: event.source,
+          webhookEventId: event.webhookEventId,
+        },
         'LINE event received',
       );
 
@@ -185,11 +194,14 @@ export class LineChannel implements Channel {
       );
 
       // Mark as read immediately so the sender sees the "Read" receipt
-      const markAsReadToken = (msgEvent.message as { markAsReadToken?: string }).markAsReadToken;
+      const markAsReadToken = (msgEvent.message as { markAsReadToken?: string })
+        .markAsReadToken;
       if (markAsReadToken && this.client) {
         this.client
           .markMessagesAsReadByToken({ markAsReadToken })
-          .catch((err) => logger.warn({ err }, 'Failed to mark LINE message as read'));
+          .catch((err) =>
+            logger.warn({ err }, 'Failed to mark LINE message as read'),
+          );
       }
 
       const { type: msgType } = msgEvent.message;
@@ -313,7 +325,10 @@ export class LineChannel implements Channel {
 
       return `[image: ${containerPath}]`;
     } catch (err) {
-      logger.error({ messageId, groupFolder, err }, 'Failed to download LINE image');
+      logger.error(
+        { messageId, groupFolder, err },
+        'Failed to download LINE image',
+      );
       return null;
     }
   }
@@ -357,7 +372,12 @@ export class LineChannel implements Channel {
     }
   }
 
-  async sendFile(jid: string, localPath: string, caption?: string, mimeType?: string): Promise<void> {
+  async sendFile(
+    jid: string,
+    localPath: string,
+    caption?: string,
+    mimeType?: string,
+  ): Promise<void> {
     if (!this.client) {
       logger.warn({ jid }, 'LINE client not initialized, cannot send file');
       return;
@@ -367,7 +387,10 @@ export class LineChannel implements Channel {
       await this.resolveImageBaseUrl();
     }
     if (!this.imageBaseUrl) {
-      logger.warn({ jid }, 'LINE_IMAGE_PUBLIC_BASE_URL not configured and ngrok not detected — skipping sendFile');
+      logger.warn(
+        { jid },
+        'LINE_IMAGE_PUBLIC_BASE_URL not configured and ngrok not detected — skipping sendFile',
+      );
       return;
     }
     if (!fs.existsSync(localPath)) {
@@ -378,10 +401,17 @@ export class LineChannel implements Channel {
     const ext = path.extname(localPath).toLowerCase();
     const resolvedMime =
       mimeType ||
-      (ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/jpeg');
+      (ext === '.png'
+        ? 'image/png'
+        : ext === '.gif'
+          ? 'image/gif'
+          : 'image/jpeg');
 
     if (!resolvedMime.startsWith('image/')) {
-      logger.warn({ jid, resolvedMime }, 'Only image/* MIME types supported for LINE sendFile');
+      logger.warn(
+        { jid, resolvedMime },
+        'Only image/* MIME types supported for LINE sendFile',
+      );
       return;
     }
 
@@ -391,9 +421,14 @@ export class LineChannel implements Channel {
     setTimeout(() => this.servedFiles.delete(token), 120_000);
 
     const imageUrl = `${this.imageBaseUrl}/images/${token}`;
-    const messages: Parameters<typeof this.client.pushMessage>[0]['messages'] = [
-      { type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl },
-    ];
+    const messages: Parameters<typeof this.client.pushMessage>[0]['messages'] =
+      [
+        {
+          type: 'image',
+          originalContentUrl: imageUrl,
+          previewImageUrl: imageUrl,
+        },
+      ];
     if (caption) {
       messages.push({ type: 'text', text: caption });
     }

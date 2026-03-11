@@ -66,9 +66,29 @@ export const TRIGGER_PATTERN = new RegExp(
 // Must point to the same server as LINE_WEBHOOK_PORT (port 3000)
 // Example: "https://abc123.ngrok-free.app"
 export const LINE_IMAGE_PUBLIC_BASE_URL =
-  process.env.LINE_IMAGE_PUBLIC_BASE_URL || envConfig.LINE_IMAGE_PUBLIC_BASE_URL || '';
+  process.env.LINE_IMAGE_PUBLIC_BASE_URL ||
+  envConfig.LINE_IMAGE_PUBLIC_BASE_URL ||
+  '';
 
 // Timezone for scheduled tasks (cron expressions, etc.)
 // Uses system timezone by default
 export const TIMEZONE =
-  process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+   
+  process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;   
+
+export const AGENT_CONFIG = {
+  // ล็อกให้ใช้ Haiku 4.5 เท่านั้น (ประหยัดที่สุด)
+  model: "claude-3-haiku-20240307", 
+  
+  // ตั้งค่า Token Limit เพื่อกันงบบานปลายต่อครั้ง
+  max_tokens: 1000, 
+  
+  // เปิดใช้งาน Prompt Caching (ถ้า SDK รองรับ) เพื่อลดค่า Token In 90%
+  enable_caching: true,
+};
+
+export const GROUP_CONFIGS = {
+  main: { trigger: "@Andy", agent_config: AGENT_CONFIG },
+  maria: { trigger: "@Maria", agent_config: AGENT_CONFIG } // เตรียมไว้ให้ Maria เลย
+}

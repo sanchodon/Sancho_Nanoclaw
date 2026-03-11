@@ -83,7 +83,12 @@ export interface Channel {
   connect(): Promise<void>;
   sendMessage(jid: string, text: string): Promise<void>;
   // Optional: send a local file to the user. Channels that support it implement it.
-  sendFile?(jid: string, localPath: string, caption?: string, mimeType?: string): Promise<void>;
+  sendFile?(
+    jid: string,
+    localPath: string,
+    caption?: string,
+    mimeType?: string,
+  ): Promise<void>;
   isConnected(): boolean;
   ownsJid(jid: string): boolean;
   disconnect(): Promise<void>;

@@ -11,14 +11,25 @@ import {
   TIMEZONE,
 } from './config.js';
 import { AvailableGroup } from './container-runner.js';
-import { clearChatData, createTask, deleteTask, getTaskById, updateTask } from './db.js';
+import {
+  clearChatData,
+  createTask,
+  deleteTask,
+  getTaskById,
+  updateTask,
+} from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
-  sendFile: (jid: string, hostPath: string, caption?: string, mimeType?: string) => Promise<void>;
+  sendFile: (
+    jid: string,
+    hostPath: string,
+    caption?: string,
+    mimeType?: string,
+  ) => Promise<void>;
   registeredGroups: () => Record<string, RegisteredGroup>;
   registerGroup: (jid: string, group: RegisteredGroup) => void;
   syncGroupMetadata: (force: boolean) => Promise<void>;
@@ -92,21 +103,46 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     'Unauthorized IPC message attempt blocked',
                   );
                 }
-              } else if (data.type === 'file' && data.chatJid && data.containerPath) {
+              } else if (
+                data.type === 'file' &&
+                data.chatJid &&
+                data.containerPath
+              ) {
                 const targetGroup = registeredGroups[data.chatJid];
-                if (isMain || (targetGroup && targetGroup.folder === sourceGroup)) {
+                if (
+                  isMain ||
+                  (targetGroup && targetGroup.folder === sourceGroup)
+                ) {
                   const containerPath = data.containerPath as string;
                   const prefix = '/workspace/group/';
                   if (!containerPath.startsWith(prefix)) {
-                    logger.warn({ containerPath, sourceGroup }, 'IPC file: unsupported container path prefix');
+                    logger.warn(
+                      { containerPath, sourceGroup },
+                      'IPC file: unsupported container path prefix',
+                    );
                   } else {
                     const relativePath = containerPath.slice(prefix.length);
-                    const hostPath = path.join(GROUPS_DIR, sourceGroup, relativePath);
-                    await deps.sendFile(data.chatJid, hostPath, data.caption, data.mimeType);
-                    logger.info({ chatJid: data.chatJid, hostPath, sourceGroup }, 'IPC file sent');
+                    const hostPath = path.join(
+                      GROUPS_DIR,
+                      sourceGroup,
+                      relativePath,
+                    );
+                    await deps.sendFile(
+                      data.chatJid,
+                      hostPath,
+                      data.caption,
+                      data.mimeType,
+                    );
+                    logger.info(
+                      { chatJid: data.chatJid, hostPath, sourceGroup },
+                      'IPC file sent',
+                    );
                   }
                 } else {
-                  logger.warn({ chatJid: data.chatJid, sourceGroup }, 'Unauthorized IPC file attempt blocked');
+                  logger.warn(
+                    { chatJid: data.chatJid, sourceGroup },
+                    'Unauthorized IPC file attempt blocked',
+                  );
                 }
               }
               fs.unlinkSync(filePath);
@@ -402,7 +438,10 @@ export async function processTaskIpc(
     case 'clear_user_data': {
       // Only the main group may issue this command
       if (!isMain) {
-        logger.warn({ sourceGroup }, 'Unauthorized clear_user_data attempt blocked');
+        logger.warn(
+          { sourceGroup },
+          'Unauthorized clear_user_data attempt blocked',
+        );
         break;
       }
       // Derive the chatJid from the registered group for this folder
@@ -410,7 +449,10 @@ export async function processTaskIpc(
         ([, g]) => g.folder === sourceGroup,
       );
       if (!entry) {
-        logger.warn({ sourceGroup }, 'clear_user_data: no registered group found for folder');
+        logger.warn(
+          { sourceGroup },
+          'clear_user_data: no registered group found for folder',
+        );
         break;
       }
       const [chatJid] = entry;
