@@ -11,10 +11,7 @@ import makeWASocket, {
   useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 
-import {
-  ASSISTANT_HAS_OWN_NUMBER,
-  STORE_DIR,
-} from '../config.js';
+import { ASSISTANT_HAS_OWN_NUMBER, STORE_DIR } from '../config.js';
 import { getLastGroupSync, setLastGroupSync, updateChatName } from '../db.js';
 import { logger } from '../logger.js';
 import {

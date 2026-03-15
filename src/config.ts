@@ -6,7 +6,10 @@ import { readEnvFile } from './env.js';
 // Read config values from .env (falls back to process.env).
 // Secrets are NOT read here — they stay on disk and are loaded only
 // where needed (container-runner.ts) to avoid leaking to child processes.
-const envConfig = readEnvFile(['ASSISTANT_HAS_OWN_NUMBER', 'LINE_IMAGE_PUBLIC_BASE_URL']);
+const envConfig = readEnvFile([
+  'ASSISTANT_HAS_OWN_NUMBER',
+  'LINE_IMAGE_PUBLIC_BASE_URL',
+]);
 
 export const ASSISTANT_HAS_OWN_NUMBER =
   (process.env.ASSISTANT_HAS_OWN_NUMBER ||
@@ -55,7 +58,10 @@ function escapeRegex(str: string): string {
  * Derive per-group assistant identity from trigger.
  * '@Maria' → 'Maria' | 'main' → 'Main' | 'family-chat' → 'Family Chat'
  */
-export function getGroupAssistantName(group: { trigger?: string; folder: string }): string {
+export function getGroupAssistantName(group: {
+  trigger?: string;
+  folder: string;
+}): string {
   const t = group.trigger?.trim();
   if (t?.startsWith('@') && t.length > 1) {
     return t.slice(1); // '@Maria' → 'Maria'

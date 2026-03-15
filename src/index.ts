@@ -64,7 +64,7 @@ interface ProcessedReceipt {
   amount: number;
   type?: string;
   timestamp: number;
-  ref_no?: string;  // Unique reference number from receipt
+  ref_no?: string; // Unique reference number from receipt
 }
 let recentReceipts: ProcessedReceipt[] = [];
 let processedRefNumbers = new Set<string>(); // Track reference numbers to prevent re-processing
@@ -156,6 +156,42 @@ export function _setRegisteredGroups(
 }
 
 /**
+ * Get Thai category name with emoji for display
+ */
+function getCategoryDisplay(category: string): string {
+  const categoryMap: Record<string, string> = {
+    '#อาหาร': '🍽️ #อาหาร (Food)',
+    '#เครื่องดื่ม': '☕ #เครื่องดื่ม (Drink)',
+    '#การเดินทาง': '🚕 #การเดินทาง (Travel)',
+    '#ค่าเช่า': '🏠 #ค่าเช่า (Rental)',
+    '#ค่าแรง': '💼 #ค่าแรง (Wage)',
+    '#ค่าน้ำไฟ': '⚡ #ค่าน้ำไฟ (Utility)',
+    '#อุปกรณ์': '📦 #อุปกรณ์ (Supply)',
+    '#การตลาด': '📢 #การตลาด (Marketing)',
+    '#ภาษี': '📊 #ภาษี (Tax)',
+    '#ส่วนตัว': '👤 #ส่วนตัว (Personal)',
+  };
+  return categoryMap[category] || category;
+}
+
+/**
+ * Get category selection menu in Thai
+ */
+function getCategoryMenu(): string {
+  return `กรุณาเลือกหมวดหมู่ครับ:
+1️⃣ 🍽️ #อาหาร (Food)
+2️⃣ ☕ #เครื่องดื่ม (Drink)
+3️⃣ 🚕 #การเดินทาง (Travel)
+4️⃣ 🏠 #ค่าเช่า (Rental)
+5️⃣ 💼 #ค่าแรง (Wage)
+6️⃣ ⚡ #ค่าน้ำไฟ (Utility)
+7️⃣ 📦 #อุปกรณ์ (Supply)
+8️⃣ 📢 #การตลาด (Marketing)
+9️⃣ 📊 #ภาษี (Tax)
+🔟 👤 #ส่วนตัว (Personal)`;
+}
+
+/**
  * Extract and process receipts from image messages in the main group.
  * Returns true if at least one receipt was processed.
  */
@@ -168,13 +204,24 @@ async function processReceiptsFromMessages(
   if (groupFolder !== MAIN_GROUP_FOLDER) return false;
 
   if (!ANTHROPIC_API_KEY) {
-    logger.warn('ANTHROPIC_API_KEY not found in .env, skipping receipt processing');
+    logger.warn(
+      'ANTHROPIC_API_KEY not found in .env, skipping receipt processing',
+    );
     return false;
   }
 
   let processedAny = false;
 
-  logger.info({ messageCount: missedMessages.length, messages: missedMessages.map(m => ({ sender: m.sender_name, preview: m.content.substring(0, 50) })) }, 'Processing receipts - checking message order');
+  logger.info(
+    {
+      messageCount: missedMessages.length,
+      messages: missedMessages.map((m) => ({
+        sender: m.sender_name,
+        preview: m.content.substring(0, 50),
+      })),
+    },
+    'Processing receipts - checking message order',
+  );
 
   // Check if first message is a short text that could be memo for pending receipt
   if (pendingReceiptForMemo && missedMessages.length > 0) {
@@ -185,31 +232,113 @@ async function processReceiptsFromMessages(
     if (!firstMsg.content.match(/\[image:/) && timeSinceReceipt < 120000) {
       const textContent = firstMsg.content.trim();
       const isShort = textContent.length < 100; // Short text likely memo
-      const isNotCommand = !textContent.startsWith('@') && !textContent.startsWith('/'); // Not a command
+      const isNotCommand =
+        !textContent.startsWith('@') && !textContent.startsWith('/'); // Not a command
 
       if (isShort && isNotCommand && textContent.length > 0) {
         logger.info(
           { text: textContent, pendingReceipt: pendingReceiptForMemo },
-          '✅ Found potential memo for pending receipt'
+          '✅ Found potential memo for pending receipt',
         );
 
         // Check if memo matches any keyword
         const keywordMap = [
-          { words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'], category: '#อาหาร' },
-          { words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'], category: '#เครื่องดื่ม' },
-          { words: ['รถ', 'น้ำมัน', 'gas', 'taxi', 'travel', 'ที่จอด', 'parking'], category: '#การเดินทาง' },
-          { words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'], category: '#ค่าเช่า' },
-          { words: ['แรง', 'เงินเดือน', 'จ้าง', 'wage', 'salary', 'นาย', 'นาง', 'น.ส.', 'staff'], category: '#ค่าแรง' },
-          { words: ['ไฟ', 'เน็ต', 'bill', 'utility', 'mea', 'ประเมา', 'true', 'ais'], category: '#ค่าน้ำไฟ' },
-          { words: ['ของ', 'ซื้อ', 'วัสดุ', 'supply', 'stock', 'equipment', 'tool'], category: '#อุปกรณ์' },
-          { words: ['โฆษณา', 'เพจ', 'ad', 'ads', 'marketing', 'facebook', 'google'], category: '#การตลาด' },
-          { words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'], category: '#ภาษี' },
-          { words: ['ส่วนตัว', 'ใช้เอง', 'personal', 'gift', 'ของขวัญ', 'wallet'], category: '#ส่วนตัว' },
+          {
+            words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'],
+            category: '#อาหาร',
+          },
+          {
+            words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'],
+            category: '#เครื่องดื่ม',
+          },
+          {
+            words: [
+              'รถ',
+              'น้ำมัน',
+              'gas',
+              'taxi',
+              'travel',
+              'ที่จอด',
+              'parking',
+            ],
+            category: '#การเดินทาง',
+          },
+          {
+            words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'],
+            category: '#ค่าเช่า',
+          },
+          {
+            words: [
+              'แรง',
+              'เงินเดือน',
+              'จ้าง',
+              'wage',
+              'salary',
+              'นาย',
+              'นาง',
+              'น.ส.',
+              'staff',
+            ],
+            category: '#ค่าแรง',
+          },
+          {
+            words: [
+              'ไฟ',
+              'เน็ต',
+              'bill',
+              'utility',
+              'mea',
+              'ประเมา',
+              'true',
+              'ais',
+            ],
+            category: '#ค่าน้ำไฟ',
+          },
+          {
+            words: [
+              'ของ',
+              'ซื้อ',
+              'วัสดุ',
+              'supply',
+              'stock',
+              'equipment',
+              'tool',
+            ],
+            category: '#อุปกรณ์',
+          },
+          {
+            words: [
+              'โฆษณา',
+              'เพจ',
+              'ad',
+              'ads',
+              'marketing',
+              'facebook',
+              'google',
+            ],
+            category: '#การตลาด',
+          },
+          {
+            words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'],
+            category: '#ภาษี',
+          },
+          {
+            words: [
+              'ส่วนตัว',
+              'ใช้เอง',
+              'personal',
+              'gift',
+              'ของขวัญ',
+              'wallet',
+            ],
+            category: '#ส่วนตัว',
+          },
         ];
 
         let matchedKeyword = '';
         // Remove common prefixes
-        let cleanedText = textContent.toLowerCase()
+        let cleanedText = textContent
+          .toLowerCase()
           .replace(/^บันทึก\s*/i, '')
           .replace(/^memo:\s*/i, '')
           .replace(/^note:\s*/i, '')
@@ -218,7 +347,10 @@ async function processReceiptsFromMessages(
         const textLower = cleanedText;
         for (const group of keywordMap) {
           for (const word of group.words) {
-            if (textLower.startsWith(word.toLowerCase()) || textLower.includes(' ' + word.toLowerCase())) {
+            if (
+              textLower.startsWith(word.toLowerCase()) ||
+              textLower.includes(' ' + word.toLowerCase())
+            ) {
               matchedKeyword = word;
               break;
             }
@@ -229,20 +361,20 @@ async function processReceiptsFromMessages(
         if (!matchedKeyword) {
           logger.warn(
             { memo: textContent, receipt: pendingReceiptForMemo },
-            '⚠️ NAME SAFETY: Memo for pending receipt has no keyword match'
+            '⚠️ NAME SAFETY: Memo for pending receipt has no keyword match',
           );
           // Get the channel to send message
           const channel = findChannel(channels, chatJid);
           if (channel) {
             await channel.sendMessage(
               chatJid,
-              `⚠️ บันทึก: "${textContent}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร\n2️⃣ #ค่าแรง\n3️⃣ #ค่าเช่า\n4️⃣ #ค่าน้ำไฟ\n5️⃣ #ส่วนตัว\n6️⃣ #อื่นๆ`
+              `⚠️ บันทึก: "${textContent}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร\n2️⃣ #ค่าแรง\n3️⃣ #ค่าเช่า\n4️⃣ #ค่าน้ำไฟ\n5️⃣ #ส่วนตัว\n6️⃣ #อื่นๆ`,
             );
           }
         }
         // Mark this memo as processed so it doesn't get sent to main agent
         lastProcessedMemoContent = textContent;
-        processedMemos.add(textContent);  // Track in current batch
+        processedMemos.add(textContent); // Track in current batch
         pendingReceiptForMemo = null; // Clear pending
       }
     }
@@ -265,12 +397,16 @@ async function processReceiptsFromMessages(
       if (!nextMsg.content.match(/\[image:/)) {
         memoText = nextMsg.content.trim();
         logger.info({ memo: memoText }, 'Memo extracted from next message');
-        processedMemos.add(memoText);  // Mark this memo as processed in current batch
+        processedMemos.add(memoText); // Mark this memo as processed in current batch
       }
     }
 
     const imagePath = imageMatch[1];
-    const filePath = path.join(GROUPS_DIR, groupFolder, imagePath.slice('/workspace/group/'.length));
+    const filePath = path.join(
+      GROUPS_DIR,
+      groupFolder,
+      imagePath.slice('/workspace/group/'.length),
+    );
     if (!fs.existsSync(filePath)) {
       logger.warn({ filePath }, 'Receipt image file not found');
       continue;
@@ -282,7 +418,10 @@ async function processReceiptsFromMessages(
 
     // Detect media type from file extension
     const ext = path.extname(filePath).toLowerCase();
-    const mediaTypeMap: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'> = {
+    const mediaTypeMap: Record<
+      string,
+      'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+    > = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
       '.png': 'image/png',
@@ -315,7 +454,7 @@ async function processReceiptsFromMessages(
             } catch {
               reject(new Error(`Invalid JSON from receipt agent: ${stdout}`));
             }
-          }
+          },
         );
 
         child.stdin?.write(input);
@@ -332,8 +471,12 @@ async function processReceiptsFromMessages(
         // If extracted year is wildly off from current year, use message date instead
         if (Math.abs(extractedYear - messageYear) > 1) {
           logger.warn(
-            { extractedDate: result.date, messageDate: msg.timestamp, messageYear },
-            '⚠️ DATE MISMATCH - Haiku extracted wrong year, using message timestamp'
+            {
+              extractedDate: result.date,
+              messageDate: msg.timestamp,
+              messageYear,
+            },
+            '⚠️ DATE MISMATCH - Haiku extracted wrong year, using message timestamp',
           );
           // Use message date (YYYY-MM-DD format)
           const y = messageDate.getFullYear();
@@ -358,31 +501,112 @@ async function processReceiptsFromMessages(
         // KEYWORD-FIRST MATCHING: Check if memo starts with recognized keyword
         const keywordMap = [
           // Food
-          { words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'], category: '#อาหาร' },
+          {
+            words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'],
+            category: '#อาหาร',
+          },
           // Drink
-          { words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'], category: '#เครื่องดื่ม' },
+          {
+            words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'],
+            category: '#เครื่องดื่ม',
+          },
           // Travel
-          { words: ['รถ', 'น้ำมัน', 'gas', 'taxi', 'travel', 'ที่จอด', 'parking'], category: '#การเดินทาง' },
+          {
+            words: [
+              'รถ',
+              'น้ำมัน',
+              'gas',
+              'taxi',
+              'travel',
+              'ที่จอด',
+              'parking',
+            ],
+            category: '#การเดินทาง',
+          },
           // Rental
-          { words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'], category: '#ค่าเช่า' },
+          {
+            words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'],
+            category: '#ค่าเช่า',
+          },
           // Wage
-          { words: ['แรง', 'เงินเดือน', 'จ้าง', 'wage', 'salary', 'นาย', 'นาง', 'น.ส.', 'staff'], category: '#ค่าแรง' },
+          {
+            words: [
+              'แรง',
+              'เงินเดือน',
+              'จ้าง',
+              'wage',
+              'salary',
+              'นาย',
+              'นาง',
+              'น.ส.',
+              'staff',
+            ],
+            category: '#ค่าแรง',
+          },
           // Utility
-          { words: ['ไฟ', 'เน็ต', 'bill', 'utility', 'mea', 'ประเมา', 'true', 'ais'], category: '#ค่าน้ำไฟ' },
+          {
+            words: [
+              'ไฟ',
+              'เน็ต',
+              'bill',
+              'utility',
+              'mea',
+              'ประเมา',
+              'true',
+              'ais',
+            ],
+            category: '#ค่าน้ำไฟ',
+          },
           // Supply
-          { words: ['ของ', 'ซื้อ', 'วัสดุ', 'supply', 'stock', 'equipment', 'tool'], category: '#อุปกรณ์' },
+          {
+            words: [
+              'ของ',
+              'ซื้อ',
+              'วัสดุ',
+              'supply',
+              'stock',
+              'equipment',
+              'tool',
+            ],
+            category: '#อุปกรณ์',
+          },
           // Marketing
-          { words: ['โฆษณา', 'เพจ', 'ad', 'ads', 'marketing', 'facebook', 'google'], category: '#การตลาด' },
+          {
+            words: [
+              'โฆษณา',
+              'เพจ',
+              'ad',
+              'ads',
+              'marketing',
+              'facebook',
+              'google',
+            ],
+            category: '#การตลาด',
+          },
           // Tax
-          { words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'], category: '#ภาษี' },
+          {
+            words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'],
+            category: '#ภาษี',
+          },
           // Personal
-          { words: ['ส่วนตัว', 'ใช้เอง', 'personal', 'gift', 'ของขวัญ', 'wallet'], category: '#ส่วนตัว' },
+          {
+            words: [
+              'ส่วนตัว',
+              'ใช้เอง',
+              'personal',
+              'gift',
+              'ของขวัญ',
+              'wallet',
+            ],
+            category: '#ส่วนตัว',
+          },
         ];
 
         let keywordMatchedCategory = '';
         if (memoText && memoText.length > 0) {
           // Remove common prefixes like "บันทึก", "memo:", "note:" etc
-          let cleanedMemo = memoText.toLowerCase()
+          let cleanedMemo = memoText
+            .toLowerCase()
             .replace(/^บันทึก\s*/i, '')
             .replace(/^memo:\s*/i, '')
             .replace(/^note:\s*/i, '')
@@ -392,7 +616,10 @@ async function processReceiptsFromMessages(
           for (const group of keywordMap) {
             for (const word of group.words) {
               // Check if memo STARTS WITH or CONTAINS the keyword
-              if (memoLower.startsWith(word.toLowerCase()) || memoLower.includes(' ' + word.toLowerCase())) {
+              if (
+                memoLower.startsWith(word.toLowerCase()) ||
+                memoLower.includes(' ' + word.toLowerCase())
+              ) {
                 keywordMatchedCategory = group.category;
                 break;
               }
@@ -401,12 +628,13 @@ async function processReceiptsFromMessages(
           }
         }
 
-        const hasMemoWithoutKeyword = memoText && memoText.length > 0 && !keywordMatchedCategory;
+        const hasMemoWithoutKeyword =
+          memoText && memoText.length > 0 && !keywordMatchedCategory;
 
         // DUPLICATE CHECK using Ref. No. (the unique identifier from receipt data)
         logger.info(
           { refNo: result.ref_no, date: validatedDate, amount: result.amount },
-          'Checking duplicates using Ref. No.'
+          'Checking duplicates using Ref. No.',
         );
 
         let isDuplicate = false;
@@ -421,12 +649,12 @@ async function processReceiptsFromMessages(
         } else {
           // If no Ref. No., fall back to date+amount check (less reliable)
           const amountDiff = Math.abs(0);
-          const recentMatch = recentReceipts.find(recent => {
+          const recentMatch = recentReceipts.find((recent) => {
             const diff = Math.abs(recent.amount - result.amount);
             return (
               recent.date === validatedDate &&
               diff <= 1 &&
-              (recent.timestamp > Date.now() - 3600000) // within last hour
+              recent.timestamp > Date.now() - 3600000 // within last hour
             );
           });
           if (recentMatch) {
@@ -437,12 +665,17 @@ async function processReceiptsFromMessages(
 
         if (isDuplicate) {
           logger.warn(
-            { refNo: result.ref_no, date: validatedDate, amount: result.amount, reason: duplicationReason },
-            '🔴 DUPLICATE DETECTED'
+            {
+              refNo: result.ref_no,
+              date: validatedDate,
+              amount: result.amount,
+              reason: duplicationReason,
+            },
+            '🔴 DUPLICATE DETECTED',
           );
           await channel.sendMessage(
             chatJid,
-            `⚠️ Duplicate Slip Detected - Not Recorded\n(${duplicationReason})`
+            `🔴 ฿${result.amount} | ${result.date}\nบันทึกซ้ำแล้ว - ไม่บันทึก\n(${duplicationReason})`,
           );
         } else {
           // Record this receipt as processed
@@ -458,7 +691,10 @@ async function processReceiptsFromMessages(
           if (result.ref_no) {
             processedRefNumbers.add(result.ref_no);
           }
-          logger.info({ recentCount: recentReceipts.length, refNo: result.ref_no }, '✅ Receipt recorded in memory');
+          logger.info(
+            { recentCount: recentReceipts.length, refNo: result.ref_no },
+            '✅ Receipt recorded in memory',
+          );
           // Keep only last 20
           if (recentReceipts.length > 20) {
             const removed = recentReceipts.shift();
@@ -471,18 +707,26 @@ async function processReceiptsFromMessages(
           if (keywordMatchedCategory) {
             logger.info(
               { memo: memoText, matchedCategory: keywordMatchedCategory },
-              '✅ KEYWORD MATCHED - Auto-recording'
+              '✅ KEYWORD MATCHED - Auto-recording',
             );
-            const confirmation = `✓ ฿${result.amount} ${result.type || '?'} ${validatedDate} ${keywordMatchedCategory} Krub.`;
+            const categoryDisplay = getCategoryDisplay(keywordMatchedCategory);
+            const confirmation = `✓ ฿${result.amount} expense | ${result.date}\n${categoryDisplay} Krub.`;
             await channel.sendMessage(chatJid, confirmation);
             processedAny = true;
           } else {
-            // No keyword match - record but ask for category
-            const confirmation = `✓ ฿${result.amount} ${result.type || '?'} ${validatedDate}. UNDO/FIX? Krub.`;
-            await channel.sendMessage(chatJid, confirmation);
+            // No keyword match - ask for category BEFORE recording
+            logger.warn(
+              { memo: memoText, amount: result.amount },
+              '⚠️ No keyword match - asking for category',
+            );
+
+            // Show expense details + ask for category
+            const memoDisplay = memoText ? `บันทึก: "${memoText}"` : 'ไม่มีบันทึก';
+            const askMessage = `⚠️ ฿${result.amount} expense | ${result.date}\n${memoDisplay}\n\n${getCategoryMenu()}`;
+            await channel.sendMessage(chatJid, askMessage);
             processedAny = true;
 
-            // Store as pending receipt waiting for potential memo
+            // Store as pending receipt waiting for category response
             pendingReceiptForMemo = {
               date: validatedDate,
               amount: result.amount,
@@ -490,30 +734,24 @@ async function processReceiptsFromMessages(
               timestamp: Date.now(),
             };
             pendingReceiptTimestamp = Date.now();
-
-            // ⚠️ NAME SAFETY CHECK: If memo exists but no keyword match, ask for category
-            if (hasMemoWithoutKeyword) {
-              logger.warn(
-                { memo: memoText, name: result.name },
-                '⚠️ NAME SAFETY: Memo exists but no keyword match - asking for category'
-              );
-              await channel.sendMessage(
-                chatJid,
-                `⚠️ บันทึก: "${memoText}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร (Food)\n2️⃣ #ค่าแรง (Wage)\n3️⃣ #ค่าเช่า (Rental)\n4️⃣ #ค่าน้ำไฟ (Utility)\n5️⃣ #ส่วนตัว (Personal)\n6️⃣ #อื่นๆ (Other)`
-              );
-            }
           }
         }
       } else {
-        logger.info({ error: result.error }, 'Receipt extraction failed or incomplete');
+        logger.info(
+          { error: result.error },
+          'Receipt extraction failed or incomplete',
+        );
         if (result.error) {
-          await channel.sendMessage(chatJid, `⚠️ Could not read receipt: ${result.error}`);
+          await channel.sendMessage(
+            chatJid,
+            `⚠️ อ่านสลิปไม่ได้ครับ: ${result.error}`,
+          );
         }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error({ error: errorMsg }, 'Receipt processing error');
-      await channel.sendMessage(chatJid, `⚠️ Error: ${errorMsg}`);
+      await channel.sendMessage(chatJid, `⚠️ เกิดข้อผิดพลาด: ${errorMsg}`);
     }
   }
 
@@ -537,22 +775,28 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const isMainGroup = group.folder === MAIN_GROUP_FOLDER;
 
   const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
-  const missedMessages = getMessagesSince(
-    chatJid,
-    sinceTimestamp,
-  );
+  const missedMessages = getMessagesSince(chatJid, sinceTimestamp);
 
   if (missedMessages.length === 0) return true;
 
   // For receipts in main group: try to extract before sending to main agent
-  const receiptsProcessed = await processReceiptsFromMessages(missedMessages, group.folder, channel, chatJid);
+  const receiptsProcessed = await processReceiptsFromMessages(
+    missedMessages,
+    group.folder,
+    channel,
+    chatJid,
+  );
 
   // Filter out image messages - they've been handled by receipt agent
-  let nonImageMessages = missedMessages.filter(m => !m.content.match(/\[image:/));
+  let nonImageMessages = missedMessages.filter(
+    (m) => !m.content.match(/\[image:/),
+  );
 
   // Filter out memo messages that were already processed (cross-poll + image extraction)
   if (processedMemos.size > 0) {
-    nonImageMessages = nonImageMessages.filter(m => !processedMemos.has(m.content.trim()));
+    nonImageMessages = nonImageMessages.filter(
+      (m) => !processedMemos.has(m.content.trim()),
+    );
   }
   // Reset tracking for next batch
   processedMemos.clear();
@@ -560,9 +804,13 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   // If only image messages were processed, mark cursor and return (skip main agent)
   if (nonImageMessages.length === 0) {
-    lastAgentTimestamp[chatJid] = missedMessages[missedMessages.length - 1].timestamp;
+    lastAgentTimestamp[chatJid] =
+      missedMessages[missedMessages.length - 1].timestamp;
     saveState();
-    logger.info({ group: group.name }, 'Only receipt images, skipping main agent');
+    logger.info(
+      { group: group.name },
+      'Only receipt images, skipping main agent',
+    );
     return true;
   }
 
@@ -608,32 +856,41 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let outputSentToUser = false;
 
   const assistantName = getGroupAssistantName(group);
-  const output = await runAgent(group, prompt, chatJid, assistantName, async (result) => {
-    // Streaming output callback — called for each agent result
-    if (result.result) {
-      const raw =
-        typeof result.result === 'string'
-          ? result.result
-          : JSON.stringify(result.result);
-      // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
-      const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
-      logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
-      if (text) {
-        await channel.sendMessage(chatJid, text);
-        outputSentToUser = true;
+  const output = await runAgent(
+    group,
+    prompt,
+    chatJid,
+    assistantName,
+    async (result) => {
+      // Streaming output callback — called for each agent result
+      if (result.result) {
+        const raw =
+          typeof result.result === 'string'
+            ? result.result
+            : JSON.stringify(result.result);
+        // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
+        const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
+        logger.info(
+          { group: group.name },
+          `Agent output: ${raw.slice(0, 200)}`,
+        );
+        if (text) {
+          await channel.sendMessage(chatJid, text);
+          outputSentToUser = true;
+        }
+        // Only reset idle timer on actual results, not session-update markers (result: null)
+        resetIdleTimer();
       }
-      // Only reset idle timer on actual results, not session-update markers (result: null)
-      resetIdleTimer();
-    }
 
-    if (result.status === 'success') {
-      queue.notifyIdle(chatJid);
-    }
+      if (result.status === 'success') {
+        queue.notifyIdle(chatJid);
+      }
 
-    if (result.status === 'error') {
-      hadError = true;
-    }
-  });
+      if (result.status === 'error') {
+        hadError = true;
+      }
+    },
+  );
 
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
@@ -755,10 +1012,7 @@ async function startMessageLoop(): Promise<void> {
   while (true) {
     try {
       const jids = Object.keys(registeredGroups);
-      const { messages, newTimestamp } = getNewMessages(
-        jids,
-        lastTimestamp,
-      );
+      const { messages, newTimestamp } = getNewMessages(jids, lastTimestamp);
 
       if (messages.length > 0) {
         logger.info({ count: messages.length }, 'New messages');

@@ -306,9 +306,7 @@ export function getNewMessages(
     ORDER BY timestamp
   `;
 
-  const rows = db
-    .prepare(sql)
-    .all(lastTimestamp, ...jids) as NewMessage[];
+  const rows = db.prepare(sql).all(lastTimestamp, ...jids) as NewMessage[];
 
   let newTimestamp = lastTimestamp;
   for (const row of rows) {
@@ -331,9 +329,7 @@ export function getMessagesSince(
       AND content != '' AND content IS NOT NULL
     ORDER BY timestamp
   `;
-  return db
-    .prepare(sql)
-    .all(chatJid, sinceTimestamp) as NewMessage[];
+  return db.prepare(sql).all(chatJid, sinceTimestamp) as NewMessage[];
 }
 
 export function createTask(
