@@ -263,7 +263,10 @@ async function processReceiptsFromMessages(
       const isNotCommand =
         !textContent.startsWith('@') && !textContent.startsWith('/'); // Not a command
 
-      if (isShort && isNotCommand && textContent.length > 0) {
+      // SKIP if it's a numeric category selection (1-10) — let numeric handler deal with it
+      const isNumericResponse = getNumericResponseCategory(textContent) !== null;
+
+      if (isShort && isNotCommand && textContent.length > 0 && !isNumericResponse) {
         logger.info(
           { text: textContent, pendingReceipt: pendingReceiptForMemo },
           '✅ Found potential memo for pending receipt',
@@ -978,11 +981,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   lastProcessedMemoContent = '';
 
   // Handle numeric category selection responses (user sent 1-10)
-  if (
-    isMainGroup &&
-    pendingCategorySelection &&
-    nonImageMessages.length > 0
-  ) {
+  if (isMainGroup && pendingCategorySelection && nonImageMessages.length > 0) {
     const firstMsg = nonImageMessages[0];
     const responseText = firstMsg.content.trim();
     const selectedCategory = getNumericResponseCategory(responseText);
