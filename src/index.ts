@@ -374,7 +374,11 @@ async function processReceiptsFromMessages(
         } else {
           // Keyword matched in cross-poll! Send confirmation with category
           logger.info(
-            { memo: textContent, matchedKeyword, receipt: pendingReceiptForMemo },
+            {
+              memo: textContent,
+              matchedKeyword,
+              receipt: pendingReceiptForMemo,
+            },
             '✅ CROSS-POLL: Keyword matched - Auto-recording',
           );
           const channel = findChannel(channels, chatJid);
@@ -382,16 +386,104 @@ async function processReceiptsFromMessages(
             // Find which category this keyword belongs to
             let matchedCategory = '';
             const keywordMap = [
-              { words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'], category: '#อาหาร' },
-              { words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'], category: '#เครื่องดื่ม' },
-              { words: ['รถ', 'น้ำมัน', 'gas', 'taxi', 'travel', 'ที่จอด', 'parking'], category: '#การเดินทาง' },
-              { words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'], category: '#ค่าเช่า' },
-              { words: ['แรง', 'เงินเดือน', 'จ้าง', 'wage', 'salary', 'นาย', 'นาง', 'น.ส.', 'staff'], category: '#ค่าแรง' },
-              { words: ['ไฟ', 'เน็ต', 'bill', 'utility', 'mea', 'ประเมา', 'true', 'ais'], category: '#ค่าน้ำไฟ' },
-              { words: ['ของ', 'ซื้อ', 'วัสดุ', 'supply', 'stock', 'equipment', 'tool'], category: '#อุปกรณ์' },
-              { words: ['โฆษณา', 'เพจ', 'ad', 'ads', 'marketing', 'facebook', 'google'], category: '#การตลาด' },
-              { words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'], category: '#ภาษี' },
-              { words: ['ส่วนตัว', 'ใช้เอง', 'personal', 'gift', 'ของขวัญ', 'wallet'], category: '#ส่วนตัว' },
+              {
+                words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'],
+                category: '#อาหาร',
+              },
+              {
+                words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'],
+                category: '#เครื่องดื่ม',
+              },
+              {
+                words: [
+                  'รถ',
+                  'น้ำมัน',
+                  'gas',
+                  'taxi',
+                  'travel',
+                  'ที่จอด',
+                  'parking',
+                ],
+                category: '#การเดินทาง',
+              },
+              {
+                words: [
+                  'เช่า',
+                  'หอ',
+                  'ห้อง',
+                  'rent',
+                  'room',
+                  'receipt',
+                  'บ้าน',
+                ],
+                category: '#ค่าเช่า',
+              },
+              {
+                words: [
+                  'แรง',
+                  'เงินเดือน',
+                  'จ้าง',
+                  'wage',
+                  'salary',
+                  'นาย',
+                  'นาง',
+                  'น.ส.',
+                  'staff',
+                ],
+                category: '#ค่าแรง',
+              },
+              {
+                words: [
+                  'ไฟ',
+                  'เน็ต',
+                  'bill',
+                  'utility',
+                  'mea',
+                  'ประเมา',
+                  'true',
+                  'ais',
+                ],
+                category: '#ค่าน้ำไฟ',
+              },
+              {
+                words: [
+                  'ของ',
+                  'ซื้อ',
+                  'วัสดุ',
+                  'supply',
+                  'stock',
+                  'equipment',
+                  'tool',
+                ],
+                category: '#อุปกรณ์',
+              },
+              {
+                words: [
+                  'โฆษณา',
+                  'เพจ',
+                  'ad',
+                  'ads',
+                  'marketing',
+                  'facebook',
+                  'google',
+                ],
+                category: '#การตลาด',
+              },
+              {
+                words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'],
+                category: '#ภาษี',
+              },
+              {
+                words: [
+                  'ส่วนตัว',
+                  'ใช้เอง',
+                  'personal',
+                  'gift',
+                  'ของขวัญ',
+                  'wallet',
+                ],
+                category: '#ส่วนตัว',
+              },
             ];
             for (const group of keywordMap) {
               if (group.words.includes(matchedKeyword)) {
@@ -529,6 +621,16 @@ async function processReceiptsFromMessages(
           },
           'Receipt extracted successfully',
         );
+
+        // Prioritize memo extracted from receipt image (from Haiku) over next message
+        if (result.memo && result.memo.length > 0) {
+          memoText = result.memo;
+          logger.info(
+            { memo: memoText },
+            'Using memo extracted from receipt image',
+          );
+          processedMemos.add(memoText); // Mark as processed
+        }
 
         // KEYWORD-FIRST MATCHING: Check if memo starts with recognized keyword
         const keywordMap = [

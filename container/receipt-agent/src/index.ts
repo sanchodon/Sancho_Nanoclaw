@@ -18,6 +18,7 @@ interface ReceiptOutput {
   amount?: number;
   type?: 'income' | 'expense';
   ref_no?: string;
+  memo?: string;
   error?: string;
   cost_usd?: number;
   input_tokens?: number;
@@ -44,11 +45,13 @@ const SYSTEM_PROMPT = `Extract receipt data from images. Return ONLY valid JSON 
   "name": "who paid/received or null",
   "amount": 123.45 or null,
   "type": "income" or "expense" or null,
-  "ref_no": "receipt reference number (Ref.No., Invoice#, Transaction ID, etc.) or null if not visible"
+  "ref_no": "receipt reference number (Ref.No., Invoice#, Transaction ID, etc.) or null if not visible",
+  "memo": "any memo/note text written on receipt (บันทึก, note, memo, etc.) or null if not visible"
 }
 Critical:
 - If you cannot read the date clearly, report it as "UNKNOWN" instead of guessing
 - Extract Ref.No/Reference Number if visible (หมายเลขรายการ, เลขที่อ้างอิง, Ref No, Invoice#, etc.)
+- Extract memo text if visible (บันทึก, หมายเหตุ, note, memo, etc.)
 - For name and amount, use null if unclear
 - No explanation text, JSON only.`;
 
@@ -132,6 +135,7 @@ async function processReceipt(input: ReceiptInput): Promise<ReceiptOutput> {
       amount: result.amount,
       type: result.type,
       ref_no: result.ref_no,
+      memo: result.memo,
       cost_usd: costUsd,
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
