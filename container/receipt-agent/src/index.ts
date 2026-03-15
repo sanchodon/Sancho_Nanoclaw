@@ -48,21 +48,24 @@ const SYSTEM_PROMPT = `Extract receipt data from images. Return ONLY valid JSON 
   "ref_no": "receipt reference number (Ref.No., Invoice#, Transaction ID, etc.) or null if not visible",
   "memo": "any category, description, or note - can be null"
 }
-Critical - DATE EXTRACTION (IMPORTANT FOR THAI RECEIPTS):
-For Thai dates in Buddhist calendar (BE), convert to Gregorian:
+CRITICAL - MEMO/CATEGORY EXTRACTION (MOST IMPORTANT):
+Step 1: Scan entire receipt image for these EXACT Thai labels and read the TEXT IMMEDIATELY FOLLOWING:
+- "บันทึก" (with or without colon) → extract the word/phrase after it
+- "ปันทึก" (with or without colon) → extract the word/phrase after it
+- "สาขา" (with or without colon) → extract the word/phrase after it
+- "ประเภท" (with or without colon) → extract the word/phrase after it
+- "ชนิด" (with or without colon) → extract the word/phrase after it
+- "รายการ" (with or without colon) → extract the word/phrase after it
+- "หมวดหมู่" (with or without colon) → extract the word/phrase after it
+Step 2: If any of these labels found, EXTRACT THE FOLLOWING TEXT (even if it's in English like "Food")
+Step 3: Only return null if genuinely no category/description label found
+Examples: If receipt shows "ปันทึก Food" → memo="Food" | "ประเภท Salary" → memo="Salary"
+IGNORE: Transaction IDs, reference numbers, merchant IDs, serial numbers - only extract category labels
+DATE EXTRACTION (THAI BUDDHIST CALENDAR):
 - Thai months: มค=01, กพ=02, มีค=03, เมย=04, พค=05, มิย=06, กค=07, สค=08, กย=09, ตค=10, พย=11, ธค=12
-- If year is 2-digit (69, 26) and >2000 in Buddhist: subtract 543 to get Gregorian year
-  Example: "03 เม.ย. 69" = day 3, month 04, year 69 (BE) = 3 April 2026 → "2026-04-03"
-- English dates just use as-is (YYYY-MM-DD)
-- If date ambiguous: report as "UNKNOWN" (don't guess)
-Critical - MEMO EXTRACTION RULES:
-Priority 1 - Extract from these labels: บันทึก, ปันทึก, สาขา, ประเภท, ชนิด, รายการ, หมวดหมู่ (NOT transaction ID fields)
-Priority 2 - Extract category keywords: Food, Drink, Coffee, Travel, Rent, Salary, Utility, Supply, Marketing, Tax, Personal
-Priority 3 - Extract Thai category words: อาหาร, เครื่องดื่ม, การเดินทาง, ค่าเช่า, ค่าแรง, ค่าน้ำไฟ, อุปกรณ์, การตลาด, ภาษี, ส่วนตัว
-Priority 4 - Extract merchant name if no explicit category found (e.g., restaurant name, hotel name)
-SKIP: Transaction IDs, reference numbers, serial numbers - these are NOT memos
-Examples: "สาขา: Food" → memo="Food" | "ประเภท: อาหาร" → memo="อาหาร" | "Bangkok Transfer" → null (not a category)
-- Ref.No: Extract from receipt if visible
+- 2-digit year (69, 26): subtract 543 to convert BE to Gregorian
+- Example: "15 มี.ค. 69" = day 15, month 03, year 69 (BE) → "2026-03-15"
+- Ref.No: Extract if visible
 - No explanation text, JSON only.`;
 
 async function processReceipt(input: ReceiptInput): Promise<ReceiptOutput> {
