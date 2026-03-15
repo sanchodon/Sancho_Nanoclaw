@@ -2,11 +2,12 @@ import fs from 'fs';
 import path from 'path';
 
 import {
-  ASSISTANT_NAME,
+  GROUPS_DIR,
   IDLE_TIMEOUT,
   MAIN_GROUP_FOLDER,
   POLL_INTERVAL,
-  TRIGGER_PATTERN,
+  getGroupAssistantName,
+  getGroupTriggerPattern,
 } from './config.js';
 import { LineChannel } from './channels/line.js';
 import {
@@ -34,6 +35,7 @@ import {
   storeChatMetadata,
   storeMessage,
 } from './db.js';
+import { readEnvFile } from './env.js';
 import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
@@ -50,6 +52,34 @@ let sessions: Record<string, string> = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
+
+// Load API key from .env for receipt processing
+const envVars = readEnvFile(['ANTHROPIC_API_KEY']);
+const ANTHROPIC_API_KEY = envVars.ANTHROPIC_API_KEY;
+
+// Track recently processed receipts for duplicate detection (last 20)
+interface ProcessedReceipt {
+  date: string;
+  name?: string;
+  amount: number;
+  type?: string;
+  timestamp: number;
+  ref_no?: string;  // Unique reference number from receipt
+}
+let recentReceipts: ProcessedReceipt[] = [];
+let processedRefNumbers = new Set<string>(); // Track reference numbers to prevent re-processing
+
+// Track pending receipts waiting for memo confirmation
+interface PendingReceipt {
+  date: string;
+  amount: number;
+  name?: string;
+  timestamp: number;
+}
+let pendingReceiptForMemo: PendingReceipt | null = null;
+let pendingReceiptTimestamp = 0;
+let lastProcessedMemoContent = ''; // Track memo texts already processed to avoid sending to agent
+let processedMemos = new Set<string>(); // Track ALL memos processed in this batch (cross-poll + image extraction)
 
 const channels: Channel[] = [];
 const queue = new GroupQueue();
@@ -126,6 +156,371 @@ export function _setRegisteredGroups(
 }
 
 /**
+ * Extract and process receipts from image messages in the main group.
+ * Returns true if at least one receipt was processed.
+ */
+async function processReceiptsFromMessages(
+  missedMessages: ReturnType<typeof getMessagesSince>,
+  groupFolder: string,
+  channel: any,
+  chatJid: string,
+): Promise<boolean> {
+  if (groupFolder !== MAIN_GROUP_FOLDER) return false;
+
+  if (!ANTHROPIC_API_KEY) {
+    logger.warn('ANTHROPIC_API_KEY not found in .env, skipping receipt processing');
+    return false;
+  }
+
+  let processedAny = false;
+
+  logger.info({ messageCount: missedMessages.length, messages: missedMessages.map(m => ({ sender: m.sender_name, preview: m.content.substring(0, 50) })) }, 'Processing receipts - checking message order');
+
+  // Check if first message is a short text that could be memo for pending receipt
+  if (pendingReceiptForMemo && missedMessages.length > 0) {
+    const firstMsg = missedMessages[0];
+    const timeSinceReceipt = Date.now() - pendingReceiptTimestamp;
+
+    // If first message is text-only and arrives within 2 minutes of receipt
+    if (!firstMsg.content.match(/\[image:/) && timeSinceReceipt < 120000) {
+      const textContent = firstMsg.content.trim();
+      const isShort = textContent.length < 100; // Short text likely memo
+      const isNotCommand = !textContent.startsWith('@') && !textContent.startsWith('/'); // Not a command
+
+      if (isShort && isNotCommand && textContent.length > 0) {
+        logger.info(
+          { text: textContent, pendingReceipt: pendingReceiptForMemo },
+          '✅ Found potential memo for pending receipt'
+        );
+
+        // Check if memo matches any keyword
+        const keywordMap = [
+          { words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'], category: '#อาหาร' },
+          { words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'], category: '#เครื่องดื่ม' },
+          { words: ['รถ', 'น้ำมัน', 'gas', 'taxi', 'travel', 'ที่จอด', 'parking'], category: '#การเดินทาง' },
+          { words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'], category: '#ค่าเช่า' },
+          { words: ['แรง', 'เงินเดือน', 'จ้าง', 'wage', 'salary', 'นาย', 'นาง', 'น.ส.', 'staff'], category: '#ค่าแรง' },
+          { words: ['ไฟ', 'เน็ต', 'bill', 'utility', 'mea', 'ประเมา', 'true', 'ais'], category: '#ค่าน้ำไฟ' },
+          { words: ['ของ', 'ซื้อ', 'วัสดุ', 'supply', 'stock', 'equipment', 'tool'], category: '#อุปกรณ์' },
+          { words: ['โฆษณา', 'เพจ', 'ad', 'ads', 'marketing', 'facebook', 'google'], category: '#การตลาด' },
+          { words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'], category: '#ภาษี' },
+          { words: ['ส่วนตัว', 'ใช้เอง', 'personal', 'gift', 'ของขวัญ', 'wallet'], category: '#ส่วนตัว' },
+        ];
+
+        let matchedKeyword = '';
+        // Remove common prefixes
+        let cleanedText = textContent.toLowerCase()
+          .replace(/^บันทึก\s*/i, '')
+          .replace(/^memo:\s*/i, '')
+          .replace(/^note:\s*/i, '')
+          .trim();
+
+        const textLower = cleanedText;
+        for (const group of keywordMap) {
+          for (const word of group.words) {
+            if (textLower.startsWith(word.toLowerCase()) || textLower.includes(' ' + word.toLowerCase())) {
+              matchedKeyword = word;
+              break;
+            }
+          }
+          if (matchedKeyword) break;
+        }
+
+        if (!matchedKeyword) {
+          logger.warn(
+            { memo: textContent, receipt: pendingReceiptForMemo },
+            '⚠️ NAME SAFETY: Memo for pending receipt has no keyword match'
+          );
+          // Get the channel to send message
+          const channel = findChannel(channels, chatJid);
+          if (channel) {
+            await channel.sendMessage(
+              chatJid,
+              `⚠️ บันทึก: "${textContent}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร\n2️⃣ #ค่าแรง\n3️⃣ #ค่าเช่า\n4️⃣ #ค่าน้ำไฟ\n5️⃣ #ส่วนตัว\n6️⃣ #อื่นๆ`
+            );
+          }
+        }
+        // Mark this memo as processed so it doesn't get sent to main agent
+        lastProcessedMemoContent = textContent;
+        processedMemos.add(textContent);  // Track in current batch
+        pendingReceiptForMemo = null; // Clear pending
+      }
+    }
+  }
+
+  for (let i = 0; i < missedMessages.length; i++) {
+    const msg = missedMessages[i];
+
+    // Detect image message: formatted as "[image: /workspace/group/images/...]"
+    const imageMatch = msg.content.match(/\[image: (.+?)\]/);
+    if (!imageMatch) continue;
+
+    // Extract memo/caption from message (text around or near the image)
+    let memoText = msg.content.replace(/\[image: .+?\]/g, '').trim();
+
+    // If no caption with image, check next message for memo (if it's text-only)
+    if (!memoText && i + 1 < missedMessages.length) {
+      const nextMsg = missedMessages[i + 1];
+      // If next message is text-only (no image), treat as memo
+      if (!nextMsg.content.match(/\[image:/)) {
+        memoText = nextMsg.content.trim();
+        logger.info({ memo: memoText }, 'Memo extracted from next message');
+        processedMemos.add(memoText);  // Mark this memo as processed in current batch
+      }
+    }
+
+    const imagePath = imageMatch[1];
+    const filePath = path.join(GROUPS_DIR, groupFolder, imagePath.slice('/workspace/group/'.length));
+    if (!fs.existsSync(filePath)) {
+      logger.warn({ filePath }, 'Receipt image file not found');
+      continue;
+    }
+
+    // Read image as base64
+    const imageBuffer = fs.readFileSync(filePath);
+    const imageBase64 = imageBuffer.toString('base64');
+
+    // Detect media type from file extension
+    const ext = path.extname(filePath).toLowerCase();
+    const mediaTypeMap: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+    };
+    const imageMediaType = mediaTypeMap[ext] || 'image/jpeg';
+
+    logger.info({ filePath }, 'Processing receipt image');
+
+    try {
+      // Spawn receipt agent container
+      const { exec } = await import('child_process');
+      const result = await new Promise<any>((resolve, reject) => {
+        const input = JSON.stringify({ imageBase64, imageMediaType });
+
+        const child = exec(
+          `container run -i --rm -e ANTHROPIC_API_KEY='${ANTHROPIC_API_KEY}' nanoclaw-receipt-agent:latest`,
+          { maxBuffer: 1024 * 1024 * 10 }, // 10MB buffer
+          (error, stdout, stderr) => {
+            if (error) {
+              reject(new Error(`Receipt agent error: ${error.message}`));
+              return;
+            }
+            if (stderr) {
+              logger.debug({ stderr }, 'Receipt agent stderr');
+            }
+            try {
+              resolve(JSON.parse(stdout));
+            } catch {
+              reject(new Error(`Invalid JSON from receipt agent: ${stdout}`));
+            }
+          }
+        );
+
+        child.stdin?.write(input);
+        child.stdin?.end();
+      });
+
+      if (result.success && result.date && result.amount) {
+        // Validate extracted date against message timestamp
+        let validatedDate = result.date;
+        const messageDate = new Date(msg.timestamp);
+        const messageYear = messageDate.getFullYear();
+        const extractedYear = parseInt(result.date.split('-')[0], 10);
+
+        // If extracted year is wildly off from current year, use message date instead
+        if (Math.abs(extractedYear - messageYear) > 1) {
+          logger.warn(
+            { extractedDate: result.date, messageDate: msg.timestamp, messageYear },
+            '⚠️ DATE MISMATCH - Haiku extracted wrong year, using message timestamp'
+          );
+          // Use message date (YYYY-MM-DD format)
+          const y = messageDate.getFullYear();
+          const m = String(messageDate.getMonth() + 1).padStart(2, '0');
+          const d = String(messageDate.getDate()).padStart(2, '0');
+          validatedDate = `${y}-${m}-${d}`;
+        }
+
+        logger.info(
+          {
+            date: validatedDate,
+            extractedDate: result.date,
+            name: result.name,
+            amount: result.amount,
+            type: result.type,
+            memo: memoText,
+            costUsd: result.cost_usd,
+          },
+          'Receipt extracted successfully',
+        );
+
+        // KEYWORD-FIRST MATCHING: Check if memo starts with recognized keyword
+        const keywordMap = [
+          // Food
+          { words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'], category: '#อาหาร' },
+          // Drink
+          { words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'], category: '#เครื่องดื่ม' },
+          // Travel
+          { words: ['รถ', 'น้ำมัน', 'gas', 'taxi', 'travel', 'ที่จอด', 'parking'], category: '#การเดินทาง' },
+          // Rental
+          { words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'], category: '#ค่าเช่า' },
+          // Wage
+          { words: ['แรง', 'เงินเดือน', 'จ้าง', 'wage', 'salary', 'นาย', 'นาง', 'น.ส.', 'staff'], category: '#ค่าแรง' },
+          // Utility
+          { words: ['ไฟ', 'เน็ต', 'bill', 'utility', 'mea', 'ประเมา', 'true', 'ais'], category: '#ค่าน้ำไฟ' },
+          // Supply
+          { words: ['ของ', 'ซื้อ', 'วัสดุ', 'supply', 'stock', 'equipment', 'tool'], category: '#อุปกรณ์' },
+          // Marketing
+          { words: ['โฆษณา', 'เพจ', 'ad', 'ads', 'marketing', 'facebook', 'google'], category: '#การตลาด' },
+          // Tax
+          { words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'], category: '#ภาษี' },
+          // Personal
+          { words: ['ส่วนตัว', 'ใช้เอง', 'personal', 'gift', 'ของขวัญ', 'wallet'], category: '#ส่วนตัว' },
+        ];
+
+        let keywordMatchedCategory = '';
+        if (memoText && memoText.length > 0) {
+          // Remove common prefixes like "บันทึก", "memo:", "note:" etc
+          let cleanedMemo = memoText.toLowerCase()
+            .replace(/^บันทึก\s*/i, '')
+            .replace(/^memo:\s*/i, '')
+            .replace(/^note:\s*/i, '')
+            .trim();
+
+          const memoLower = cleanedMemo;
+          for (const group of keywordMap) {
+            for (const word of group.words) {
+              // Check if memo STARTS WITH or CONTAINS the keyword
+              if (memoLower.startsWith(word.toLowerCase()) || memoLower.includes(' ' + word.toLowerCase())) {
+                keywordMatchedCategory = group.category;
+                break;
+              }
+            }
+            if (keywordMatchedCategory) break;
+          }
+        }
+
+        const hasMemoWithoutKeyword = memoText && memoText.length > 0 && !keywordMatchedCategory;
+
+        // DUPLICATE CHECK using Ref. No. (the unique identifier from receipt data)
+        logger.info(
+          { refNo: result.ref_no, date: validatedDate, amount: result.amount },
+          'Checking duplicates using Ref. No.'
+        );
+
+        let isDuplicate = false;
+        let duplicationReason = '';
+
+        // First: Check if Ref. No. is present and already processed
+        if (result.ref_no) {
+          if (processedRefNumbers.has(result.ref_no)) {
+            isDuplicate = true;
+            duplicationReason = `Ref. No. ${result.ref_no} already processed`;
+          }
+        } else {
+          // If no Ref. No., fall back to date+amount check (less reliable)
+          const amountDiff = Math.abs(0);
+          const recentMatch = recentReceipts.find(recent => {
+            const diff = Math.abs(recent.amount - result.amount);
+            return (
+              recent.date === validatedDate &&
+              diff <= 1 &&
+              (recent.timestamp > Date.now() - 3600000) // within last hour
+            );
+          });
+          if (recentMatch) {
+            isDuplicate = true;
+            duplicationReason = `Date+Amount match (less reliable - no Ref. No. on receipt)`;
+          }
+        }
+
+        if (isDuplicate) {
+          logger.warn(
+            { refNo: result.ref_no, date: validatedDate, amount: result.amount, reason: duplicationReason },
+            '🔴 DUPLICATE DETECTED'
+          );
+          await channel.sendMessage(
+            chatJid,
+            `⚠️ Duplicate Slip Detected - Not Recorded\n(${duplicationReason})`
+          );
+        } else {
+          // Record this receipt as processed
+          recentReceipts.push({
+            date: validatedDate,
+            name: result.name,
+            amount: result.amount,
+            type: result.type,
+            timestamp: Date.now(),
+            ref_no: result.ref_no,
+          });
+          // Track reference number to prevent re-processing
+          if (result.ref_no) {
+            processedRefNumbers.add(result.ref_no);
+          }
+          logger.info({ recentCount: recentReceipts.length, refNo: result.ref_no }, '✅ Receipt recorded in memory');
+          // Keep only last 20
+          if (recentReceipts.length > 20) {
+            const removed = recentReceipts.shift();
+            if (removed?.ref_no) {
+              processedRefNumbers.delete(removed.ref_no);
+            }
+          }
+
+          // If keyword matched, record with category. Otherwise ask user
+          if (keywordMatchedCategory) {
+            logger.info(
+              { memo: memoText, matchedCategory: keywordMatchedCategory },
+              '✅ KEYWORD MATCHED - Auto-recording'
+            );
+            const confirmation = `✓ ฿${result.amount} ${result.type || '?'} ${validatedDate} ${keywordMatchedCategory} Krub.`;
+            await channel.sendMessage(chatJid, confirmation);
+            processedAny = true;
+          } else {
+            // No keyword match - record but ask for category
+            const confirmation = `✓ ฿${result.amount} ${result.type || '?'} ${validatedDate}. UNDO/FIX? Krub.`;
+            await channel.sendMessage(chatJid, confirmation);
+            processedAny = true;
+
+            // Store as pending receipt waiting for potential memo
+            pendingReceiptForMemo = {
+              date: validatedDate,
+              amount: result.amount,
+              name: result.name,
+              timestamp: Date.now(),
+            };
+            pendingReceiptTimestamp = Date.now();
+
+            // ⚠️ NAME SAFETY CHECK: If memo exists but no keyword match, ask for category
+            if (hasMemoWithoutKeyword) {
+              logger.warn(
+                { memo: memoText, name: result.name },
+                '⚠️ NAME SAFETY: Memo exists but no keyword match - asking for category'
+              );
+              await channel.sendMessage(
+                chatJid,
+                `⚠️ บันทึก: "${memoText}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร (Food)\n2️⃣ #ค่าแรง (Wage)\n3️⃣ #ค่าเช่า (Rental)\n4️⃣ #ค่าน้ำไฟ (Utility)\n5️⃣ #ส่วนตัว (Personal)\n6️⃣ #อื่นๆ (Other)`
+              );
+            }
+          }
+        }
+      } else {
+        logger.info({ error: result.error }, 'Receipt extraction failed or incomplete');
+        if (result.error) {
+          await channel.sendMessage(chatJid, `⚠️ Could not read receipt: ${result.error}`);
+        }
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error({ error: errorMsg }, 'Receipt processing error');
+      await channel.sendMessage(chatJid, `⚠️ Error: ${errorMsg}`);
+    }
+  }
+
+  return processedAny;
+}
+
+/**
  * Process all pending messages for a group.
  * Called by the GroupQueue when it's this group's turn.
  */
@@ -145,20 +540,42 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const missedMessages = getMessagesSince(
     chatJid,
     sinceTimestamp,
-    ASSISTANT_NAME,
   );
 
   if (missedMessages.length === 0) return true;
 
+  // For receipts in main group: try to extract before sending to main agent
+  const receiptsProcessed = await processReceiptsFromMessages(missedMessages, group.folder, channel, chatJid);
+
+  // Filter out image messages - they've been handled by receipt agent
+  let nonImageMessages = missedMessages.filter(m => !m.content.match(/\[image:/));
+
+  // Filter out memo messages that were already processed (cross-poll + image extraction)
+  if (processedMemos.size > 0) {
+    nonImageMessages = nonImageMessages.filter(m => !processedMemos.has(m.content.trim()));
+  }
+  // Reset tracking for next batch
+  processedMemos.clear();
+  lastProcessedMemoContent = '';
+
+  // If only image messages were processed, mark cursor and return (skip main agent)
+  if (nonImageMessages.length === 0) {
+    lastAgentTimestamp[chatJid] = missedMessages[missedMessages.length - 1].timestamp;
+    saveState();
+    logger.info({ group: group.name }, 'Only receipt images, skipping main agent');
+    return true;
+  }
+
   // For non-main groups, check if trigger is required and present
   if (!isMainGroup && group.requiresTrigger !== false) {
-    const hasTrigger = missedMessages.some((m) =>
-      TRIGGER_PATTERN.test(m.content.trim()),
+    const triggerPattern = getGroupTriggerPattern(group.trigger || '');
+    const hasTrigger = nonImageMessages.some((m) =>
+      triggerPattern.test(m.content.trim()),
     );
     if (!hasTrigger) return true;
   }
 
-  const prompt = formatMessages(missedMessages);
+  const prompt = formatMessages(nonImageMessages);
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
@@ -190,7 +607,8 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let hadError = false;
   let outputSentToUser = false;
 
-  const output = await runAgent(group, prompt, chatJid, async (result) => {
+  const assistantName = getGroupAssistantName(group);
+  const output = await runAgent(group, prompt, chatJid, assistantName, async (result) => {
     // Streaming output callback — called for each agent result
     if (result.result) {
       const raw =
@@ -247,6 +665,7 @@ async function runAgent(
   group: RegisteredGroup,
   prompt: string,
   chatJid: string,
+  assistantName: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
 ): Promise<'success' | 'error'> {
   const isMain = group.folder === MAIN_GROUP_FOLDER;
@@ -297,7 +716,7 @@ async function runAgent(
         groupFolder: group.folder,
         chatJid,
         isMain,
-        assistantName: ASSISTANT_NAME,
+        assistantName,
       },
       (proc, containerName) =>
         queue.registerProcess(chatJid, proc, containerName, group.folder),
@@ -331,7 +750,7 @@ async function startMessageLoop(): Promise<void> {
   }
   messageLoopRunning = true;
 
-  logger.info(`NanoClaw running (trigger: @${ASSISTANT_NAME})`);
+  logger.info('NanoClaw running');
 
   while (true) {
     try {
@@ -339,7 +758,6 @@ async function startMessageLoop(): Promise<void> {
       const { messages, newTimestamp } = getNewMessages(
         jids,
         lastTimestamp,
-        ASSISTANT_NAME,
       );
 
       if (messages.length > 0) {
@@ -377,8 +795,9 @@ async function startMessageLoop(): Promise<void> {
           // Non-trigger messages accumulate in DB and get pulled as
           // context when a trigger eventually arrives.
           if (needsTrigger) {
+            const triggerPattern = getGroupTriggerPattern(group.trigger || '');
             const hasTrigger = groupMessages.some((m) =>
-              TRIGGER_PATTERN.test(m.content.trim()),
+              triggerPattern.test(m.content.trim()),
             );
             if (!hasTrigger) continue;
           }
@@ -388,7 +807,6 @@ async function startMessageLoop(): Promise<void> {
           const allPending = getMessagesSince(
             chatJid,
             lastAgentTimestamp[chatJid] || '',
-            ASSISTANT_NAME,
           );
           const messagesToSend =
             allPending.length > 0 ? allPending : groupMessages;
@@ -428,7 +846,7 @@ async function startMessageLoop(): Promise<void> {
 function recoverPendingMessages(): void {
   for (const [chatJid, group] of Object.entries(registeredGroups)) {
     const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
-    const pending = getMessagesSince(chatJid, sinceTimestamp, ASSISTANT_NAME);
+    const pending = getMessagesSince(chatJid, sinceTimestamp);
     if (pending.length > 0) {
       logger.info(
         { group: group.name, pendingCount: pending.length },

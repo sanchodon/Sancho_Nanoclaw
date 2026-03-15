@@ -511,9 +511,12 @@ async function main(): Promise<void> {
   // Build SDK env: merge secrets into process.env for the SDK only.
   // Secrets never touch process.env itself, so Bash subprocesses can't see them.
   const sdkEnv: Record<string, string | undefined> = { ...process.env };
+  log(`DEBUG: Received secrets keys: ${Object.keys(containerInput.secrets || {}).join(', ')}`);
+  log(`DEBUG: ANTHROPIC_API_KEY present: ${!!containerInput.secrets?.ANTHROPIC_API_KEY}`);
   for (const [key, value] of Object.entries(containerInput.secrets || {})) {
     sdkEnv[key] = value;
   }
+  log(`DEBUG: SDK env has ANTHROPIC_API_KEY: ${!!sdkEnv.ANTHROPIC_API_KEY}`);
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const mcpServerPath = path.join(__dirname, 'ipc-mcp-stdio.js');

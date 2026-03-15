@@ -233,9 +233,9 @@ describe('WhatsAppChannel', () => {
       (channel as any).connected = true;
       await (channel as any).flushOutgoingQueue();
 
-      // Group messages get prefixed when flushed
+      // Messages are sent without prefix
       expect(fakeSocket.sendMessage).toHaveBeenCalledWith('test@g.us', {
-        text: 'Andy: Queued message',
+        text: 'Queued message',
       });
     });
 
@@ -697,23 +697,23 @@ describe('WhatsAppChannel', () => {
       await connectChannel(channel);
 
       await channel.sendMessage('test@g.us', 'Hello');
-      // Group messages get prefixed with assistant name
+      // Messages are sent without prefix
       expect(fakeSocket.sendMessage).toHaveBeenCalledWith('test@g.us', {
-        text: 'Andy: Hello',
+        text: 'Hello',
       });
     });
 
-    it('prefixes direct chat messages on shared number', async () => {
+    it('sends direct chat messages without prefix', async () => {
       const opts = createTestOpts();
       const channel = new WhatsAppChannel(opts);
 
       await connectChannel(channel);
 
       await channel.sendMessage('123@s.whatsapp.net', 'Hello');
-      // Shared number: DMs also get prefixed (needed for self-chat distinction)
+      // Messages are sent without prefix
       expect(fakeSocket.sendMessage).toHaveBeenCalledWith(
         '123@s.whatsapp.net',
-        { text: 'Andy: Hello' },
+        { text: 'Hello' },
       );
     });
 
@@ -757,15 +757,15 @@ describe('WhatsAppChannel', () => {
       await new Promise((r) => setTimeout(r, 50));
 
       expect(fakeSocket.sendMessage).toHaveBeenCalledTimes(3);
-      // Group messages get prefixed
+      // Messages are sent without prefix
       expect(fakeSocket.sendMessage).toHaveBeenNthCalledWith(1, 'test@g.us', {
-        text: 'Andy: First',
+        text: 'First',
       });
       expect(fakeSocket.sendMessage).toHaveBeenNthCalledWith(2, 'test@g.us', {
-        text: 'Andy: Second',
+        text: 'Second',
       });
       expect(fakeSocket.sendMessage).toHaveBeenNthCalledWith(3, 'test@g.us', {
-        text: 'Andy: Third',
+        text: 'Third',
       });
     });
   });

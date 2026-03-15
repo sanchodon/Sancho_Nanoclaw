@@ -6,14 +6,8 @@ import { readEnvFile } from './env.js';
 // Read config values from .env (falls back to process.env).
 // Secrets are NOT read here — they stay on disk and are loaded only
 // where needed (container-runner.ts) to avoid leaking to child processes.
-const envConfig = readEnvFile([
-  'ASSISTANT_NAME',
-  'ASSISTANT_HAS_OWN_NUMBER',
-  'LINE_IMAGE_PUBLIC_BASE_URL',
-]);
+const envConfig = readEnvFile(['ASSISTANT_HAS_OWN_NUMBER', 'LINE_IMAGE_PUBLIC_BASE_URL']);
 
-export const ASSISTANT_NAME =
-  process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'Andy';
 export const ASSISTANT_HAS_OWN_NUMBER =
   (process.env.ASSISTANT_HAS_OWN_NUMBER ||
     envConfig.ASSISTANT_HAS_OWN_NUMBER) === 'true';
@@ -57,10 +51,32 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export const TRIGGER_PATTERN = new RegExp(
-  `^@${escapeRegex(ASSISTANT_NAME)}\\b`,
-  'i',
-);
+/**
+ * Derive per-group assistant identity from trigger.
+ * '@Maria' → 'Maria' | 'main' → 'Main' | 'family-chat' → 'Family Chat'
+ */
+export function getGroupAssistantName(group: { trigger?: string; folder: string }): string {
+  const t = group.trigger?.trim();
+  if (t?.startsWith('@') && t.length > 1) {
+    return t.slice(1); // '@Maria' → 'Maria'
+  }
+  if (t && t.length > 0) {
+    return t; // raw trigger word used as name
+  }
+  // Fallback: capitalize folder name
+  return group.folder
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/**
+ * Generate per-group trigger pattern.
+ * '@Maria' → /^@Maria\b/i
+ */
+export function getGroupTriggerPattern(trigger: string): RegExp {
+  return new RegExp(`^${escapeRegex(trigger)}\\b`, 'i');
+}
 
 // Public HTTPS base URL for serving image files to LINE (e.g. ngrok URL)
 // Must point to the same server as LINE_WEBHOOK_PORT (port 3000)
@@ -84,9 +100,4 @@ export const AGENT_CONFIG = {
 
   // เปิดใช้งาน Prompt Caching (ถ้า SDK รองรับ) เพื่อลดค่า Token In 90%
   enable_caching: true,
-};
-
-export const GROUP_CONFIGS = {
-  main: { trigger: '@Andy', agent_config: AGENT_CONFIG },
-  maria: { trigger: '@Maria', agent_config: AGENT_CONFIG }, // เตรียมไว้ให้ Maria เลย
 };

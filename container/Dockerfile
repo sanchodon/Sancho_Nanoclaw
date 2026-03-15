@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     git \
     python3 \
     python3-matplotlib \
+    python3-pandas \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser

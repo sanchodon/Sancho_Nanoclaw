@@ -8,7 +8,6 @@ import { messagingApi, validateSignature, webhook } from '@line/bot-sdk';
 
 import {
   ASSISTANT_HAS_OWN_NUMBER,
-  ASSISTANT_NAME,
   GROUPS_DIR,
   LINE_IMAGE_PUBLIC_BASE_URL,
 } from '../config.js';
@@ -268,9 +267,8 @@ export class LineChannel implements Channel {
         }
       }
 
-      const isBotMessage = ASSISTANT_HAS_OWN_NUMBER
-        ? false // LINE bots never receive their own pushed messages via webhook
-        : content.startsWith(`${ASSISTANT_NAME}:`);
+      // LINE Official Account never receives its own messages via webhook
+      const isBotMessage = false;
 
       this.opts.onMessage(chatJid, {
         id: msgEvent.webhookEventId || msgEvent.message.id,
@@ -339,18 +337,14 @@ export class LineChannel implements Channel {
       return;
     }
 
-    const prefixed = ASSISTANT_HAS_OWN_NUMBER
-      ? text
-      : `${ASSISTANT_NAME}: ${text}`;
-
     const LINE_TEXT_LIMIT = 5000;
-    if (prefixed.length > LINE_TEXT_LIMIT) {
+    if (text.length > LINE_TEXT_LIMIT) {
       logger.warn(
-        { jid, length: prefixed.length, limit: LINE_TEXT_LIMIT },
+        { jid, length: text.length, limit: LINE_TEXT_LIMIT },
         'LINE message exceeds 5000-char limit, truncating',
       );
     }
-    const payload = prefixed.slice(0, LINE_TEXT_LIMIT);
+    const payload = text.slice(0, LINE_TEXT_LIMIT);
 
     logger.debug({ jid, length: payload.length }, 'Sending LINE push message');
 

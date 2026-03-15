@@ -3,10 +3,10 @@ import { CronExpressionParser } from 'cron-parser';
 import fs from 'fs';
 
 import {
-  ASSISTANT_NAME,
   MAIN_GROUP_FOLDER,
   SCHEDULER_POLL_INTERVAL,
   TIMEZONE,
+  getGroupAssistantName,
 } from './config.js';
 import {
   ContainerOutput,
@@ -133,6 +133,7 @@ async function runTask(
   };
 
   try {
+    const assistantName = getGroupAssistantName(group);
     const output = await runContainerAgent(
       group,
       {
@@ -142,7 +143,7 @@ async function runTask(
         chatJid: task.chat_jid,
         isMain,
         isScheduledTask: true,
-        assistantName: ASSISTANT_NAME,
+        assistantName,
       },
       (proc, containerName) =>
         deps.onProcess(task.chat_jid, proc, containerName, task.group_folder),
