@@ -48,20 +48,20 @@ const SYSTEM_PROMPT = `Extract receipt data from images. Return ONLY valid JSON 
   "ref_no": "receipt reference number (Ref.No., Invoice#, Transaction ID, etc.) or null if not visible",
   "memo": "any category, description, or note - can be null"
 }
+Critical - DATE EXTRACTION (IMPORTANT FOR THAI RECEIPTS):
+For Thai dates in Buddhist calendar (BE), convert to Gregorian:
+- Thai months: มค=01, กพ=02, มีค=03, เมย=04, พค=05, มิย=06, กค=07, สค=08, กย=09, ตค=10, พย=11, ธค=12
+- If year is 2-digit (69, 26) and >2000 in Buddhist: subtract 543 to get Gregorian year
+  Example: "03 เม.ย. 69" = day 3, month 04, year 69 (BE) = 3 April 2026 → "2026-04-03"
+- English dates just use as-is (YYYY-MM-DD)
+- If date ambiguous: report as "UNKNOWN" (don't guess)
 Critical - MEMO EXTRACTION RULES:
-Priority 1 - Extract from these labels: บันทึก, สาขา, หมายเหตุ, ประเภท, ชนิด, รายการ, หมวดหมู่, หมายการ
+Priority 1 - Extract from these labels: สาขา, ประเภท, ชนิด, รายการ, หมวดหมู่ (NOT transaction ID fields)
 Priority 2 - Extract category keywords: Food, Drink, Coffee, Travel, Rent, Salary, Utility, Supply, Marketing, Tax, Personal
 Priority 3 - Extract Thai category words: อาหาร, เครื่องดื่ม, การเดินทาง, ค่าเช่า, ค่าแรง, ค่าน้ำไฟ, อุปกรณ์, การตลาด, ภาษี, ส่วนตัว
-Priority 4 - Extract merchant name or service type if no explicit memo found
-IMPORTANT: If you see ANY of these words/labels on the receipt, extract the text that follows (e.g., if you see "สาขา: Food", extract "Food")
-Search strategy:
-1. Scan receipt for key labels: บันทึก:, สาขา:, หมายเหตุ:, ประเภท:, etc.
-2. If found, extract the value after the label
-3. If not found, look for any descriptive text fields
-4. If still not found, look for single category words anywhere on receipt
-5. Return null ONLY if genuinely no category/description found
-Examples: If receipt shows "สาขา: Food" → memo="Food". If shows "บันทึก: อาหาร" → memo="อาหาร".
-- Date: Report as "UNKNOWN" if not clearly readable (don't guess)
+Priority 4 - Extract merchant name if no explicit category found (e.g., restaurant name, hotel name)
+SKIP: Transaction IDs, reference numbers, serial numbers - these are NOT memos
+Examples: "สาขา: Food" → memo="Food" | "ประเภท: อาหาร" → memo="อาหาร" | "Bangkok Transfer" → null (not a category)
 - Ref.No: Extract from receipt if visible
 - No explanation text, JSON only.`;
 
