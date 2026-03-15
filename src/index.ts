@@ -78,6 +78,14 @@ interface PendingReceipt {
 }
 let pendingReceiptForMemo: PendingReceipt | null = null;
 let pendingReceiptTimestamp = 0;
+
+// Track pending category selection (user needs to respond with 1-10)
+interface PendingCategorySelection {
+  receipt: PendingReceipt;
+  requestedAt: number;
+}
+let pendingCategorySelection: PendingCategorySelection | null = null;
+
 let lastProcessedMemoContent = ''; // Track memo texts already processed to avoid sending to agent
 let processedMemos = new Set<string>(); // Track ALL memos processed in this batch (cross-poll + image extraction)
 
@@ -153,6 +161,26 @@ export function _setRegisteredGroups(
   groups: Record<string, RegisteredGroup>,
 ): void {
   registeredGroups = groups;
+}
+
+/**
+ * Map numeric response (1-10) to category
+ */
+function getNumericResponseCategory(response: string): string | null {
+  const responseNum = parseInt(response.trim(), 10);
+  const categoryMap: Record<number, string> = {
+    1: '#อาหาร',
+    2: '#เครื่องดื่ม',
+    3: '#การเดินทาง',
+    4: '#ค่าเช่า',
+    5: '#ค่าแรง',
+    6: '#ค่าน้ำไฟ',
+    7: '#อุปกรณ์',
+    8: '#การตลาด',
+    9: '#ภาษี',
+    10: '#ส่วนตัว',
+  };
+  return categoryMap[responseNum] || null;
 }
 
 /**
@@ -365,11 +393,16 @@ async function processReceiptsFromMessages(
           );
           // Get the channel to send message
           const channel = findChannel(channels, chatJid);
-          if (channel) {
+          if (channel && pendingReceiptForMemo) {
             await channel.sendMessage(
               chatJid,
               `⚠️ บันทึก: "${textContent}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร\n2️⃣ #ค่าแรง\n3️⃣ #ค่าเช่า\n4️⃣ #ค่าน้ำไฟ\n5️⃣ #ส่วนตัว\n6️⃣ #อื่นๆ`,
             );
+            // Set pending category selection so next numeric response gets intercepted
+            pendingCategorySelection = {
+              receipt: pendingReceiptForMemo,
+              requestedAt: Date.now(),
+            };
           }
         } else {
           // Keyword matched in cross-poll! Send confirmation with category
@@ -500,6 +533,7 @@ async function processReceiptsFromMessages(
         lastProcessedMemoContent = textContent;
         processedMemos.add(textContent); // Track in current batch
         pendingReceiptForMemo = null; // Clear pending
+        pendingCategorySelection = null; // Clear pending category selection
       }
     }
   }
@@ -854,6 +888,20 @@ async function processReceiptsFromMessages(
               '⚠️ No keyword match - asking for category',
             );
 
+            // Store as pending receipt waiting for category response
+            const receipt = {
+              date: validatedDate,
+              amount: result.amount,
+              name: result.name,
+              timestamp: Date.now(),
+            };
+            pendingReceiptForMemo = receipt;
+            pendingReceiptTimestamp = Date.now();
+            pendingCategorySelection = {
+              receipt,
+              requestedAt: Date.now(),
+            };
+
             // Show expense details + ask for category
             const memoDisplay = memoText
               ? `บันทึก: "${memoText}"`
@@ -861,15 +909,6 @@ async function processReceiptsFromMessages(
             const askMessage = `⚠️ ฿${result.amount} expense | ${result.date}\n${memoDisplay}\n\n${getCategoryMenu()}`;
             await channel.sendMessage(chatJid, askMessage);
             processedAny = true;
-
-            // Store as pending receipt waiting for category response
-            pendingReceiptForMemo = {
-              date: validatedDate,
-              amount: result.amount,
-              name: result.name,
-              timestamp: Date.now(),
-            };
-            pendingReceiptTimestamp = Date.now();
           }
         }
       } else {
@@ -937,6 +976,55 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   // Reset tracking for next batch
   processedMemos.clear();
   lastProcessedMemoContent = '';
+
+  // Handle numeric category selection responses (user sent 1-10)
+  if (
+    isMainGroup &&
+    pendingCategorySelection &&
+    nonImageMessages.length > 0
+  ) {
+    const firstMsg = nonImageMessages[0];
+    const responseText = firstMsg.content.trim();
+    const selectedCategory = getNumericResponseCategory(responseText);
+
+    if (selectedCategory) {
+      const receipt = pendingCategorySelection.receipt;
+      logger.info(
+        { amount: receipt.amount, category: selectedCategory },
+        '✅ User selected category via numeric response',
+      );
+
+      // Record the transaction with selected category
+      const categoryDisplay = getCategoryDisplay(selectedCategory);
+      const confirmation = `✓ ฿${receipt.amount} expense | ${receipt.date}\n${categoryDisplay} Krub.`;
+
+      const channel = findChannel(channels, chatJid);
+      if (channel) {
+        await channel.sendMessage(chatJid, confirmation);
+      }
+
+      // Mark the numeric response as processed
+      processedMemos.add(responseText);
+      nonImageMessages = nonImageMessages.filter(
+        (m) => m.timestamp !== firstMsg.timestamp,
+      );
+
+      // Clear pending category selection
+      pendingCategorySelection = null;
+
+      // Mark cursor and return (don't send to agent)
+      if (nonImageMessages.length === 0) {
+        lastAgentTimestamp[chatJid] =
+          missedMessages[missedMessages.length - 1].timestamp;
+        saveState();
+        logger.info(
+          { group: group.name },
+          'Numeric category response handled, skipping main agent',
+        );
+        return true;
+      }
+    }
+  }
 
   // If only image messages were processed, mark cursor and return (skip main agent)
   if (nonImageMessages.length === 0) {
