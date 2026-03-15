@@ -781,19 +781,19 @@ async function processReceiptsFromMessages(
             duplicationReason = `Ref. No. ${result.ref_no} already processed`;
           }
         } else {
-          // If no Ref. No., fall back to date+amount check (less reliable)
-          const amountDiff = Math.abs(0);
+          // If no Ref. No., fall back to date+amount check (EXACT match only - very strict)
+          // Require EXACT amount match (no tolerance) to avoid false positives
           const recentMatch = recentReceipts.find((recent) => {
             const diff = Math.abs(recent.amount - result.amount);
             return (
               recent.date === validatedDate &&
-              diff <= 1 &&
+              diff === 0 &&
               recent.timestamp > Date.now() - 3600000 // within last hour
             );
           });
           if (recentMatch) {
             isDuplicate = true;
-            duplicationReason = `Date+Amount match (less reliable - no Ref. No. on receipt)`;
+            duplicationReason = `Exact date+amount match (no Ref. No. on receipt)`;
           }
         }
 
