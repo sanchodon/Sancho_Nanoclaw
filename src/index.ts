@@ -852,7 +852,7 @@ async function processReceiptsFromMessages(
           );
           await channel.sendMessage(
             chatJid,
-            `🔴 ฿${result.amount} | ${result.date}\nบันทึกซ้ำแล้ว - ไม่บันทึก\n(${duplicationReason})`,
+            `🔴 ฿${result.amount} | ${validatedDate}\nบันทึกซ้ำแล้ว - ไม่บันทึก\n(${duplicationReason})`,
           );
         } else {
           // Record this receipt as processed
