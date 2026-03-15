@@ -46,18 +46,23 @@ const SYSTEM_PROMPT = `Extract receipt data from images. Return ONLY valid JSON 
   "amount": 123.45 or null,
   "type": "income" or "expense" or null,
   "ref_no": "receipt reference number (Ref.No., Invoice#, Transaction ID, etc.) or null if not visible",
-  "memo": "category/description/note text - EXTRACT ANY OF: บันทึก, สาขา, หมายเหตุ, note, memo, description, category, merchant type, Food, Drink, Travel, Rental, Wage, Utility, Supply, Marketing, Tax, Personal, or any single-word label indicating transaction type. Or null if not found."
+  "memo": "any category, description, or note - can be null"
 }
-Critical:
-- If you cannot read the date clearly, report it as "UNKNOWN" instead of guessing
-- Extract Ref.No if visible (หมายเลขรายการ, เลขที่อ้างอิง, Ref No, Invoice#, etc.)
-- FOR MEMO: Capture ANY descriptive field text, especially:
-  * English category words: Food, Drink, Coffee, Travel, Rent, Salary, Utility, Supply, Marketing, Tax, Personal, Shopping, Delivery, Service, Item
-  * Thai labels: สาขา, หมายเหตุ, บันทึก, ประเภท, ชนิด, รายการ
-  * Description fields regardless of label
-- Look at ALL text fields on receipt, not just specific labels
-- Even single words that suggest category are valuable
-- For name and amount, use null if unclear
+Critical - MEMO EXTRACTION RULES:
+Priority 1 - Extract from these labels: บันทึก, สาขา, หมายเหตุ, ประเภท, ชนิด, รายการ, หมวดหมู่, หมายการ
+Priority 2 - Extract category keywords: Food, Drink, Coffee, Travel, Rent, Salary, Utility, Supply, Marketing, Tax, Personal
+Priority 3 - Extract Thai category words: อาหาร, เครื่องดื่ม, การเดินทาง, ค่าเช่า, ค่าแรง, ค่าน้ำไฟ, อุปกรณ์, การตลาด, ภาษี, ส่วนตัว
+Priority 4 - Extract merchant name or service type if no explicit memo found
+IMPORTANT: If you see ANY of these words/labels on the receipt, extract the text that follows (e.g., if you see "สาขา: Food", extract "Food")
+Search strategy:
+1. Scan receipt for key labels: บันทึก:, สาขา:, หมายเหตุ:, ประเภท:, etc.
+2. If found, extract the value after the label
+3. If not found, look for any descriptive text fields
+4. If still not found, look for single category words anywhere on receipt
+5. Return null ONLY if genuinely no category/description found
+Examples: If receipt shows "สาขา: Food" → memo="Food". If shows "บันทึก: อาหาร" → memo="อาหาร".
+- Date: Report as "UNKNOWN" if not clearly readable (don't guess)
+- Ref.No: Extract from receipt if visible
 - No explanation text, JSON only.`;
 
 async function processReceipt(input: ReceiptInput): Promise<ReceiptOutput> {
