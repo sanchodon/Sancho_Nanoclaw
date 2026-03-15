@@ -887,7 +887,7 @@ async function processReceiptsFromMessages(
               '✅ KEYWORD MATCHED - Auto-recording',
             );
             const categoryDisplay = getCategoryDisplay(keywordMatchedCategory);
-            const confirmation = `✓ ฿${result.amount} expense | ${result.date}\n${categoryDisplay} Krub.`;
+            const confirmation = `✓ ฿${result.amount} expense | ${validatedDate}\n${categoryDisplay} Krub.`;
             await channel.sendMessage(chatJid, confirmation);
             processedAny = true;
           } else {
@@ -915,7 +915,7 @@ async function processReceiptsFromMessages(
             const memoDisplay = memoText
               ? `🔖 บันทึก: "${memoText}"`
               : '💰 เลือกหมวดหมู่ครับ';
-            const askMessage = `✓ ฿${result.amount} expense | ${result.date}\n${memoDisplay}\n\n${getCategoryMenu()}`;
+            const askMessage = `✓ ฿${result.amount} expense | ${validatedDate}\n${memoDisplay}\n\n${getCategoryMenu()}`;
             await channel.sendMessage(chatJid, askMessage);
             processedAny = true;
           }
