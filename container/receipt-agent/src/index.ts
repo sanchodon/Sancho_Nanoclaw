@@ -61,15 +61,17 @@ Step 2: If any of these labels found, EXTRACT THE FOLLOWING TEXT (even if it's i
 Step 3: Only return null if genuinely no category/description label found
 Examples: If receipt shows "ปันทึก Food" → memo="Food" | "ประเภท Salary" → memo="Salary"
 IGNORE: Transaction IDs, reference numbers, merchant IDs, serial numbers - only extract category labels
-DATE EXTRACTION (CRITICAL - MULTIPLE DATES ON RECEIPT):
-Receipts have multiple dates. Extract TRANSACTION DATE ONLY (when money moved):
-- Look for: "วันที่ เวลา", "Date Time", "Transaction Date" at TOP of receipt
-- SKIP: Historical dates, reference numbers containing dates, posting dates from 2022
+DATE EXTRACTION (CRITICAL - THAI BUDDHIST CALENDAR):
+Extract TRANSACTION DATE ONLY (where money moved), usually at TOP of receipt:
 - Thai months: มค=01, กพ=02, มีค=03, เมย=04, พค=05, มิย=06, กค=07, สค=08, กย=09, ตค=10, พย=11, ธค=12
-- 2-digit year (69, 26): subtract 543 to convert BE to Gregorian
-- Example: "15 มี.ค. 69" = day 15, month 03, year 69 (BE) → "2026-03-15"
-- USE: The date closest to top of receipt (that's the transaction date)
-- IGNORE: Any date from 2022 or older if a recent date (2025, 2026) is visible
+- TWO-DIGIT YEAR CONVERSION (MOST IMPORTANT):
+  * If you see a 2-digit year like "69", "26", "68" on receipt: these are Buddhist years (BE)
+  * Buddhist year format is 4-digit: "69" = "2569" (add "25" prefix to 2-digit year)
+  * Convert to Gregorian: subtract 543 from the 4-digit Buddhist year
+  * Example: "15 มี.ค. 69" → year 69 = 2569 (BE) → 2569 - 543 = 2026 (Gregorian) → "2026-03-15"
+  * Another example: "10 เมย. 25" → year 25 = 2525 (BE) → 2525 - 543 = 1982 (Gregorian) → "1982-04-10"
+- SKIP: Any date showing 2022 or 2023 (these are from historical transaction records, not current transaction)
+- USE: Only dates at the TOP of receipt with recent year (2024, 2025, 2026 Gregorian equivalent)
 - Ref.No: Extract if visible
 - No explanation text, JSON only.`;
 
