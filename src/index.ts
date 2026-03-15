@@ -371,6 +371,38 @@ async function processReceiptsFromMessages(
               `⚠️ บันทึก: "${textContent}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร\n2️⃣ #ค่าแรง\n3️⃣ #ค่าเช่า\n4️⃣ #ค่าน้ำไฟ\n5️⃣ #ส่วนตัว\n6️⃣ #อื่นๆ`,
             );
           }
+        } else {
+          // Keyword matched in cross-poll! Send confirmation with category
+          logger.info(
+            { memo: textContent, matchedKeyword, receipt: pendingReceiptForMemo },
+            '✅ CROSS-POLL: Keyword matched - Auto-recording',
+          );
+          const channel = findChannel(channels, chatJid);
+          if (channel && pendingReceiptForMemo) {
+            // Find which category this keyword belongs to
+            let matchedCategory = '';
+            const keywordMap = [
+              { words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'], category: '#อาหาร' },
+              { words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'], category: '#เครื่องดื่ม' },
+              { words: ['รถ', 'น้ำมัน', 'gas', 'taxi', 'travel', 'ที่จอด', 'parking'], category: '#การเดินทาง' },
+              { words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'], category: '#ค่าเช่า' },
+              { words: ['แรง', 'เงินเดือน', 'จ้าง', 'wage', 'salary', 'นาย', 'นาง', 'น.ส.', 'staff'], category: '#ค่าแรง' },
+              { words: ['ไฟ', 'เน็ต', 'bill', 'utility', 'mea', 'ประเมา', 'true', 'ais'], category: '#ค่าน้ำไฟ' },
+              { words: ['ของ', 'ซื้อ', 'วัสดุ', 'supply', 'stock', 'equipment', 'tool'], category: '#อุปกรณ์' },
+              { words: ['โฆษณา', 'เพจ', 'ad', 'ads', 'marketing', 'facebook', 'google'], category: '#การตลาด' },
+              { words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'], category: '#ภาษี' },
+              { words: ['ส่วนตัว', 'ใช้เอง', 'personal', 'gift', 'ของขวัญ', 'wallet'], category: '#ส่วนตัว' },
+            ];
+            for (const group of keywordMap) {
+              if (group.words.includes(matchedKeyword)) {
+                matchedCategory = group.category;
+                break;
+              }
+            }
+            const categoryDisplay = getCategoryDisplay(matchedCategory);
+            const confirmation = `✓ ฿${pendingReceiptForMemo.amount} expense | ${pendingReceiptForMemo.date}\n${categoryDisplay} Krub.`;
+            await channel.sendMessage(chatJid, confirmation);
+          }
         }
         // Mark this memo as processed so it doesn't get sent to main agent
         lastProcessedMemoContent = textContent;
@@ -721,7 +753,9 @@ async function processReceiptsFromMessages(
             );
 
             // Show expense details + ask for category
-            const memoDisplay = memoText ? `บันทึก: "${memoText}"` : 'ไม่มีบันทึก';
+            const memoDisplay = memoText
+              ? `บันทึก: "${memoText}"`
+              : 'ไม่มีบันทึก';
             const askMessage = `⚠️ ฿${result.amount} expense | ${result.date}\n${memoDisplay}\n\n${getCategoryMenu()}`;
             await channel.sendMessage(chatJid, askMessage);
             processedAny = true;
