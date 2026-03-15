@@ -56,7 +56,7 @@ For Thai dates in Buddhist calendar (BE), convert to Gregorian:
 - English dates just use as-is (YYYY-MM-DD)
 - If date ambiguous: report as "UNKNOWN" (don't guess)
 Critical - MEMO EXTRACTION RULES:
-Priority 1 - Extract from these labels: สาขา, ประเภท, ชนิด, รายการ, หมวดหมู่ (NOT transaction ID fields)
+Priority 1 - Extract from these labels: บันทึก, ปันทึก, สาขา, ประเภท, ชนิด, รายการ, หมวดหมู่ (NOT transaction ID fields)
 Priority 2 - Extract category keywords: Food, Drink, Coffee, Travel, Rent, Salary, Utility, Supply, Marketing, Tax, Personal
 Priority 3 - Extract Thai category words: อาหาร, เครื่องดื่ม, การเดินทาง, ค่าเช่า, ค่าแรง, ค่าน้ำไฟ, อุปกรณ์, การตลาด, ภาษี, ส่วนตัว
 Priority 4 - Extract merchant name if no explicit category found (e.g., restaurant name, hotel name)
