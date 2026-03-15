@@ -405,7 +405,7 @@ async function processReceiptsFromMessages(
           if (channel && pendingReceiptForMemo) {
             await channel.sendMessage(
               chatJid,
-              `⚠️ บันทึก: "${textContent}" แต่ไม่ตรงหมวด\n\nกรุณาเลือก:\n1️⃣ #อาหาร\n2️⃣ #ค่าแรง\n3️⃣ #ค่าเช่า\n4️⃣ #ค่าน้ำไฟ\n5️⃣ #ส่วนตัว\n6️⃣ #อื่นๆ`,
+              `✓ ฿${pendingReceiptForMemo.amount} expense | ${pendingReceiptForMemo.date}\n🔖 บันทึก: "${textContent}"\n\n💰 เลือกหมวดหมู่ครับ:\n1️⃣ #อาหาร\n2️⃣ #เครื่องดื่ม\n3️⃣ #การเดินทาง\n4️⃣ #ค่าเช่า\n5️⃣ #ค่าแรง\n6️⃣ #ค่าน้ำไฟ\n7️⃣ #อุปกรณ์\n8️⃣ #การตลาด\n9️⃣ #ภาษี\n🔟 #ส่วนตัว`,
             );
             // Set pending category selection so next numeric response gets intercepted
             pendingCategorySelection = {
@@ -913,9 +913,9 @@ async function processReceiptsFromMessages(
 
             // Show expense details + ask for category
             const memoDisplay = memoText
-              ? `บันทึก: "${memoText}"`
-              : 'ไม่มีบันทึก';
-            const askMessage = `⚠️ ฿${result.amount} expense | ${result.date}\n${memoDisplay}\n\n${getCategoryMenu()}`;
+              ? `🔖 บันทึก: "${memoText}"`
+              : '💰 เลือกหมวดหมู่ครับ';
+            const askMessage = `✓ ฿${result.amount} expense | ${result.date}\n${memoDisplay}\n\n${getCategoryMenu()}`;
             await channel.sendMessage(chatJid, askMessage);
             processedAny = true;
           }
