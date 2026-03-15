@@ -46,12 +46,13 @@ const SYSTEM_PROMPT = `Extract receipt data from images. Return ONLY valid JSON 
   "amount": 123.45 or null,
   "type": "income" or "expense" or null,
   "ref_no": "receipt reference number (Ref.No., Invoice#, Transaction ID, etc.) or null if not visible",
-  "memo": "any memo/note text written on receipt (บันทึก, note, memo, etc.) or null if not visible"
+  "memo": "any category/description/note text visible on receipt (บันทึก, สาขา, หมายเหตุ, note, memo, description, category, Food, Drink, etc.) or null if not visible"
 }
 Critical:
 - If you cannot read the date clearly, report it as "UNKNOWN" instead of guessing
 - Extract Ref.No/Reference Number if visible (หมายเลขรายการ, เลขที่อ้างอิง, Ref No, Invoice#, etc.)
-- Extract memo text if visible (บันทึก, หมายเหตุ, note, memo, etc.)
+- Extract ANY descriptive/category text from receipt including: บันทึก, สาขา, หมายเหตุ, note, memo, description, category labels, merchant category, etc.
+- Look for single words that might be category indicators (Food, Drink, Rent, etc.)
 - For name and amount, use null if unclear
 - No explanation text, JSON only.`;
 
