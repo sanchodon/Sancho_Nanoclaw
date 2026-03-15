@@ -46,13 +46,17 @@ const SYSTEM_PROMPT = `Extract receipt data from images. Return ONLY valid JSON 
   "amount": 123.45 or null,
   "type": "income" or "expense" or null,
   "ref_no": "receipt reference number (Ref.No., Invoice#, Transaction ID, etc.) or null if not visible",
-  "memo": "any category/description/note text visible on receipt (บันทึก, สาขา, หมายเหตุ, note, memo, description, category, Food, Drink, etc.) or null if not visible"
+  "memo": "category/description/note text - EXTRACT ANY OF: บันทึก, สาขา, หมายเหตุ, note, memo, description, category, merchant type, Food, Drink, Travel, Rental, Wage, Utility, Supply, Marketing, Tax, Personal, or any single-word label indicating transaction type. Or null if not found."
 }
 Critical:
 - If you cannot read the date clearly, report it as "UNKNOWN" instead of guessing
-- Extract Ref.No/Reference Number if visible (หมายเลขรายการ, เลขที่อ้างอิง, Ref No, Invoice#, etc.)
-- Extract ANY descriptive/category text from receipt including: บันทึก, สาขา, หมายเหตุ, note, memo, description, category labels, merchant category, etc.
-- Look for single words that might be category indicators (Food, Drink, Rent, etc.)
+- Extract Ref.No if visible (หมายเลขรายการ, เลขที่อ้างอิง, Ref No, Invoice#, etc.)
+- FOR MEMO: Capture ANY descriptive field text, especially:
+  * English category words: Food, Drink, Coffee, Travel, Rent, Salary, Utility, Supply, Marketing, Tax, Personal, Shopping, Delivery, Service, Item
+  * Thai labels: สาขา, หมายเหตุ, บันทึก, ประเภท, ชนิด, รายการ
+  * Description fields regardless of label
+- Look at ALL text fields on receipt, not just specific labels
+- Even single words that suggest category are valuable
 - For name and amount, use null if unclear
 - No explanation text, JSON only.`;
 
