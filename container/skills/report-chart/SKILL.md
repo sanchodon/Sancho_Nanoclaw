@@ -1,7 +1,7 @@
 ---
 name: report-chart
 description: Generate and send an expense pie chart from daily_sales.xlsx data, grouped by category. Can filter by month (e.g., 2026-03).
-allowed-tools: Bash(report-chart:*)
+allowed-tools: Bash
 ---
 
 # Report Chart
@@ -12,12 +12,12 @@ Generates a pie chart showing expenses by category from `daily_sales.xlsx` and s
 
 Generate chart for all time:
 ```bash
-python3 /workspace/group/chart_gen.py "$(node -e "const XLSX=require('xlsx');const wb=XLSX.readFile('/workspace/group/daily_sales.xlsx');const ws=wb.Sheets[wb.SheetNames[0]];console.log(JSON.stringify(XLSX.utils.sheet_to_json(ws)));" 2>/dev/null)"
+python3 /workspace/group/chart_gen.py
 ```
 
 Generate chart for a specific month (e.g., 2026-03):
 ```bash
-python3 /workspace/group/chart_gen.py "$(node -e "const XLSX=require('xlsx');const wb=XLSX.readFile('/workspace/group/daily_sales.xlsx');const ws=wb.Sheets[wb.SheetNames[0]];console.log(JSON.stringify(XLSX.utils.sheet_to_json(ws)));" 2>/dev/null)" "2026-03"
+python3 /workspace/group/chart_gen.py "2026-03"
 ```
 
 ## Output
@@ -40,7 +40,7 @@ On error (no data):
 
 ```bash
 # Generate report for current month
-python3 /workspace/group/chart_gen.py "$(node -e "const XLSX=require('xlsx');const wb=XLSX.readFile('/workspace/group/daily_sales.xlsx');const ws=wb.Sheets[wb.SheetNames[0]];console.log(JSON.stringify(XLSX.utils.sheet_to_json(ws)));" 2>/dev/null)" "2026-03"
+python3 /workspace/group/chart_gen.py "2026-03"
 
 # Response will be OK and summary.png will be created
 # Then send the image to user via sendMessage()

@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-matplotlib \
     python3-pandas \
+    python3-openpyxl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
@@ -46,6 +47,10 @@ RUN chmod +x /usr/local/bin/update-sales-ledger
 # Install clear-user-data tool
 COPY clear-user-data.js /usr/local/bin/clear-user-data
 RUN chmod +x /usr/local/bin/clear-user-data
+
+# Install export-report tool
+COPY export-report.js /usr/local/bin/export-report
+RUN chmod +x /usr/local/bin/export-report
 
 # Create app directory
 WORKDIR /app

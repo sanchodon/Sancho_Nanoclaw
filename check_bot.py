@@ -38,5 +38,5 @@ print("--- 🛡️ NANOCLAW SYSTEM CHECK (Apple Container) ---")
 #print(f"📍 M2 Thermal Status: {get_m2_temp()}")
 print(f"🌍 Internet/API Path: {check_api_ping()}")
 # Updated to look for Sancho
-print(f"🤖 Bot Status (Sancho): {check_process_status('nanoclaw')}") 
+print(f"🤖 Bot Status  : {check_process_status('nanoclaw')}") 
 print("-------------------------------------------------")

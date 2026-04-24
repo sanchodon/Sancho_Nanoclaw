@@ -33,3 +33,7 @@ groups/global/*
 .nanoclaw/
 
 agents-sdk-docs
+messages.db
+nanoclaw.db
+nanoclaw.err
+nanoclaw.log

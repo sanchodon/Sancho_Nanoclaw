@@ -47,6 +47,9 @@ Service management:
 # macOS (launchd)
 launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
 launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nanoclaw.plist
+
 launchctl kickstart -k gui/$(id -u)/com.nanoclaw  # restart
 
 # Linux (systemd)

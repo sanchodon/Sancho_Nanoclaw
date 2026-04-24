@@ -30,6 +30,11 @@ export interface AllowedRoot {
 export interface ContainerConfig {
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)
+  model?: string; // Override default model (e.g. 'claude-sonnet-4-6')
+  lineChannelSecret?: string; // Which LINE sub-channel owns this group (for outbound routing)
+  allowedTools?: string[]; // Override default tool list to reduce token overhead
+  useLiteRunner?: boolean; // Use direct Anthropic API instead of Agent SDK (~10x cheaper, no tools)
+  minimalSystemPrompt?: boolean; // Skip Claude Code preset — use just CLAUDE.md (~50k fewer tokens/session)
 }
 
 export interface RegisteredGroup {
@@ -42,6 +47,7 @@ export interface RegisteredGroup {
 }
 
 export interface NewMessage {
+  rowid?: number; // Set by DB on queries; not known when constructing inbound messages
   id: string;
   chat_jid: string;
   sender: string;
@@ -50,6 +56,7 @@ export interface NewMessage {
   timestamp: string;
   is_from_me?: boolean;
   is_bot_message?: boolean;
+  reply_token?: string; // LINE reply token (valid 60 seconds, free to use)
 }
 
 export interface ScheduledTask {

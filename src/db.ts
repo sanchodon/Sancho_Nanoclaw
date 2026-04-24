@@ -291,45 +291,62 @@ export function storeMessageDirect(msg: {
 
 export function getNewMessages(
   jids: string[],
-  lastTimestamp: string,
+  lastCursor: string,
 ): { messages: NewMessage[]; newTimestamp: string } {
-  if (jids.length === 0) return { messages: [], newTimestamp: lastTimestamp };
+  if (jids.length === 0) return { messages: [], newTimestamp: lastCursor };
 
   const placeholders = jids.map(() => '?').join(',');
+  const sinceRowid = parseInt(lastCursor, 10) || 0;
   // Filter bot messages using is_bot_message flag only
   const sql = `
-    SELECT id, chat_jid, sender, sender_name, content, timestamp
+    SELECT rowid, id, chat_jid, sender, sender_name, content, timestamp
     FROM messages
-    WHERE timestamp > ? AND chat_jid IN (${placeholders})
+    WHERE rowid > ? AND chat_jid IN (${placeholders})
       AND is_bot_message = 0
       AND content != '' AND content IS NOT NULL
-    ORDER BY timestamp
+    ORDER BY rowid
   `;
 
-  const rows = db.prepare(sql).all(lastTimestamp, ...jids) as NewMessage[];
+  const rows = db.prepare(sql).all(sinceRowid, ...jids) as NewMessage[];
 
-  let newTimestamp = lastTimestamp;
+  let newCursor = lastCursor;
   for (const row of rows) {
-    if (row.timestamp > newTimestamp) newTimestamp = row.timestamp;
+    if ((row.rowid ?? 0) > (parseInt(newCursor, 10) || 0)) newCursor = String(row.rowid!);
   }
 
-  return { messages: rows, newTimestamp };
+  return { messages: rows, newTimestamp: newCursor };
 }
 
 export function getMessagesSince(
   chatJid: string,
   sinceTimestamp: string,
 ): NewMessage[] {
+  const sinceRowid = parseInt(sinceTimestamp, 10) || 0;
   // Filter bot messages using is_bot_message flag only
   const sql = `
-    SELECT id, chat_jid, sender, sender_name, content, timestamp
+    SELECT rowid, id, chat_jid, sender, sender_name, content, timestamp
     FROM messages
-    WHERE chat_jid = ? AND timestamp > ?
+    WHERE chat_jid = ? AND rowid > ?
       AND is_bot_message = 0
       AND content != '' AND content IS NOT NULL
-    ORDER BY timestamp
+    ORDER BY rowid
   `;
-  return db.prepare(sql).all(chatJid, sinceTimestamp) as NewMessage[];
+  return db.prepare(sql).all(chatJid, sinceRowid) as NewMessage[];
+}
+
+/**
+ * Migrate an ISO timestamp cursor to a rowid cursor.
+ * Used on startup to convert persisted lastAgentTimestamp / lastTimestamp values
+ * from the old timestamp-based format to the new rowid-based format.
+ * Rowid cursors are already integers stored as strings — leave them unchanged.
+ */
+export function migrateTimestampCursor(cursor: string): string {
+  if (!cursor || /^\d+$/.test(cursor)) return cursor; // already rowid or empty
+  // Find max rowid of messages with timestamp <= the stored ISO timestamp
+  const row = db
+    .prepare(`SELECT MAX(rowid) AS max_rowid FROM messages WHERE timestamp <= ?`)
+    .get(cursor) as { max_rowid: number | null };
+  return row?.max_rowid ? String(row.max_rowid) : '0';
 }
 
 export function createTask(

@@ -22,7 +22,7 @@ import {
   updateTaskAfterRun,
 } from './db.js';
 import { GroupQueue } from './group-queue.js';
-import { resolveGroupFolderPath } from './group-folder.js';
+import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup, ScheduledTask } from './types.js';
 
@@ -128,7 +128,15 @@ async function runTask(
     if (closeTimer) return; // already scheduled
     closeTimer = setTimeout(() => {
       logger.debug({ taskId: task.id }, 'Closing task container after result');
+      // Try queue first (works if state is still active), then write directly
+      // (queue state may already be cleared by runContainerAgent resolving).
       deps.queue.closeStdin(task.chat_jid);
+      try {
+        const ipcInputDir = resolveGroupIpcPath(task.group_folder) + '/input';
+        fs.mkdirSync(ipcInputDir, { recursive: true });
+        fs.writeFileSync(ipcInputDir + '/_close', '');
+        logger.debug({ taskId: task.id }, 'Task close sentinel written directly');
+      } catch { /* ignore */ }
     }, TASK_CLOSE_DELAY_MS);
   };
 

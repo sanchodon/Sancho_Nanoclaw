@@ -36,7 +36,11 @@ export const MAIN_GROUP_FOLDER = 'main';
 export const CONTAINER_IMAGE =
   process.env.CONTAINER_IMAGE || 'nanoclaw-agent:latest';
 export const CONTAINER_TIMEOUT = parseInt(
-  process.env.CONTAINER_TIMEOUT || '1800000',
+  process.env.CONTAINER_TIMEOUT || '300000', // 5 min idle timeout
+  10,
+);
+export const CONTAINER_HARD_TIMEOUT = parseInt(
+  process.env.CONTAINER_HARD_TIMEOUT || '300000', // 5 min wall-clock hard cap (cannot be reset by activity)
   10,
 );
 export const CONTAINER_MAX_OUTPUT_SIZE = parseInt(
@@ -44,7 +48,7 @@ export const CONTAINER_MAX_OUTPUT_SIZE = parseInt(
   10,
 ); // 10MB default
 export const IPC_POLL_INTERVAL = 1000;
-export const IDLE_TIMEOUT = parseInt(process.env.IDLE_TIMEOUT || '1800000', 10); // 30min default — how long to keep container alive after last result
+export const IDLE_TIMEOUT = parseInt(process.env.IDLE_TIMEOUT || '300000', 10); // 5 min idle — how long to keep container alive after last result
 export const MAX_CONCURRENT_CONTAINERS = Math.max(
   1,
   parseInt(process.env.MAX_CONCURRENT_CONTAINERS || '5', 10) || 5,
@@ -78,10 +82,16 @@ export function getGroupAssistantName(group: {
 
 /**
  * Generate per-group trigger pattern.
- * '@Maria' → /^@Maria\b/i
+ * Supports '|'-separated alternatives: 'Maria|มาเรีย'
+ * ASCII triggers use word boundaries; non-ASCII (Thai etc.) use substring match.
  */
 export function getGroupTriggerPattern(trigger: string): RegExp {
-  return new RegExp(`^${escapeRegex(trigger)}\\b`, 'i');
+  const parts = trigger.split('|').map(t => t.trim()).filter(Boolean);
+  const patterns = parts.map(p => {
+    const escaped = escapeRegex(p);
+    return /^[\x00-\x7F]+$/.test(p) ? `\\b${escaped}\\b` : escaped;
+  });
+  return new RegExp(patterns.join('|'), 'i');
 }
 
 // Public HTTPS base URL for serving image files to LINE (e.g. ngrok URL)

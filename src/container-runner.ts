@@ -4,10 +4,12 @@
  */
 import { ChildProcess, exec, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import {
   CONTAINER_IMAGE,
+  CONTAINER_HARD_TIMEOUT,
   CONTAINER_MAX_OUTPUT_SIZE,
   CONTAINER_TIMEOUT,
   DATA_DIR,
@@ -38,6 +40,10 @@ export interface ContainerInput {
   isMain: boolean;
   isScheduledTask?: boolean;
   assistantName?: string;
+  model?: string;
+  allowedTools?: string[];
+  useLiteMode?: boolean;
+  minimalSystemPrompt?: boolean;
   secrets?: Record<string, string>;
 }
 
@@ -153,6 +159,16 @@ function buildVolumeMounts(
     readonly: false,
   });
 
+  // Gmail MCP credentials — only mounted if the user has authenticated
+  const gmailDir = path.join(os.homedir(), '.gmail-mcp');
+  if (fs.existsSync(gmailDir)) {
+    mounts.push({
+      hostPath: gmailDir,
+      containerPath: '/home/node/.gmail-mcp',
+      readonly: false, // MCP server needs write access to refresh OAuth tokens
+    });
+  }
+
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC
   const groupIpcDir = resolveGroupIpcPath(group.folder);
@@ -180,8 +196,8 @@ function buildVolumeMounts(
     group.folder,
     'agent-runner-src',
   );
-  if (!fs.existsSync(groupAgentRunnerDir) && fs.existsSync(agentRunnerSrc)) {
-    fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
+  if (fs.existsSync(agentRunnerSrc)) {
+    fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true, force: true });
   }
   mounts.push({
     hostPath: groupAgentRunnerDir,
@@ -257,6 +273,48 @@ export async function runContainerAgent(
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const containerName = `nanoclaw-${safeName}-${Date.now()}`;
   const containerArgs = buildContainerArgs(mounts, containerName);
+
+  // Inject model and allowedTools from containerConfig if not already set
+  if (!input.model && group.containerConfig?.model) {
+    input = { ...input, model: group.containerConfig.model };
+  }
+  if (!input.allowedTools && group.containerConfig?.allowedTools) {
+    input = { ...input, allowedTools: group.containerConfig.allowedTools };
+  }
+  if (group.containerConfig?.useLiteRunner) {
+    input = { ...input, useLiteMode: true };
+  }
+  if (group.containerConfig?.minimalSystemPrompt) {
+    input = { ...input, minimalSystemPrompt: true };
+  }
+
+  // For non-lite agents: inject shared folder contents into the prompt automatically.
+  // Lite runner handles this itself inside the container; SDK agents need it prepended here.
+  if (!group.containerConfig?.useLiteRunner && group.containerConfig?.additionalMounts) {
+    const INJECTABLE_EXTENSIONS = ['.txt', '.json', '.md'];
+    const sharedSections: string[] = [];
+    for (const mount of group.containerConfig.additionalMounts) {
+      const hostPath = mount.hostPath.replace(/^~/, process.env.HOME || '');
+      const containerPath = mount.containerPath || path.basename(mount.hostPath);
+      try {
+        const files = fs.readdirSync(hostPath).filter(f => {
+          const ext = path.extname(f).toLowerCase();
+          return INJECTABLE_EXTENSIONS.includes(ext) && !f.startsWith('.');
+        });
+        for (const fname of files) {
+          try {
+            const content = fs.readFileSync(path.join(hostPath, fname), 'utf-8').trim();
+            sharedSections.push(`[shared/${fname}]\n${content}`);
+          } catch { /* ignore unreadable files */ }
+        }
+      } catch { /* mount not accessible yet */ }
+      if (sharedSections.length > 0) {
+        const sharedBlock = `\n\n---\n## SHARED FOLDER (/workspace/extra/${containerPath})\nThe following files are shared with all agents. You can read or update them using your file tools.\n\n${sharedSections.join('\n\n')}\n---\n`;
+        input = { ...input, prompt: sharedBlock + input.prompt };
+        logger.debug({ group: group.name, files: sharedSections.length }, 'Injected shared folder into prompt');
+      }
+    }
+  }
 
   logger.debug(
     {
@@ -362,9 +420,14 @@ export async function runContainerAgent(
 
     container.stderr.on('data', (data) => {
       const chunk = data.toString();
-      const lines = chunk.trim().split('\n');
-      for (const line of lines) {
-        if (line) logger.debug({ container: group.folder }, line);
+      // Skip per-line serialization unless debug logging is active.
+      // The SDK emits heavy stderr; per-line pino calls cause event loop starvation
+      // that delays setTimeout callbacks by minutes in production.
+      if (logger.isLevelEnabled('debug')) {
+        const lines = chunk.trim().split('\n');
+        for (const line of lines) {
+          if (line) logger.debug({ container: group.folder }, line);
+        }
       }
       // Don't reset timeout on stderr — SDK writes debug logs continuously.
       // Timeout only resets on actual output (OUTPUT_MARKER in stdout).
@@ -385,14 +448,18 @@ export async function runContainerAgent(
     let timedOut = false;
     let hadStreamingOutput = false;
     const configTimeout = group.containerConfig?.timeout || CONTAINER_TIMEOUT;
-    // Grace period: hard timeout must be at least IDLE_TIMEOUT + 30s so the
+    // Grace period: idle timeout must be at least IDLE_TIMEOUT + 30s so the
     // graceful _close sentinel has time to trigger before the hard kill fires.
-    const timeoutMs = Math.max(configTimeout, IDLE_TIMEOUT + 30_000);
+    const idleTimeoutMs = Math.max(configTimeout, IDLE_TIMEOUT + 30_000);
+    // Hard wall-clock cap — cannot be reset by activity. Prevents runaway containers.
+    const hardTimeoutMs = group.containerConfig?.timeout || CONTAINER_HARD_TIMEOUT;
 
-    const killOnTimeout = () => {
+    let hardDeadlineFired = false;
+    const killOnTimeout = (reason: string) => {
       timedOut = true;
+      if (reason === 'hard-deadline') hardDeadlineFired = true;
       logger.error(
-        { group: group.name, containerName },
+        { group: group.name, containerName, reason },
         'Container timeout, stopping gracefully',
       );
       exec(stopContainer(containerName), { timeout: 15000 }, (err) => {
@@ -406,16 +473,37 @@ export async function runContainerAgent(
       });
     };
 
-    let timeout = setTimeout(killOnTimeout, timeoutMs);
+    let idleTimeout = setTimeout(() => killOnTimeout('idle'), idleTimeoutMs);
 
-    // Reset the timeout whenever there's activity (streaming output)
+    // Hard deadline via external shell watchdog — immune to Node.js event loop starvation.
+    // Node.js setTimeout can be delayed by minutes when the event loop is saturated by
+    // heavy SDK stderr I/O. A shell `sleep` runs in a separate process unaffected by JS scheduling.
+    const hardDeadlineWatchdog = exec(
+      `sleep ${Math.ceil(hardTimeoutMs / 1000)} && ${CONTAINER_RUNTIME_BIN} kill "${containerName}" 2>/dev/null; true`,
+      { timeout: hardTimeoutMs + 60000 },
+    );
+    hardDeadlineWatchdog.on('close', () => {
+      if (!timedOut) {
+        // Watchdog sleep completed — container kill was sent. Container will exit shortly,
+        // triggering container.on('close') which handles resolution.
+        timedOut = true;
+        hardDeadlineFired = true;
+        logger.error(
+          { group: group.name, containerName, elapsed: Date.now() - startTime },
+          'Container hard deadline watchdog fired',
+        );
+      }
+    });
+
+    // Reset only the IDLE timeout whenever there's activity (streaming output)
     const resetTimeout = () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(killOnTimeout, timeoutMs);
+      clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => killOnTimeout('idle'), idleTimeoutMs);
     };
 
     container.on('close', (code) => {
-      clearTimeout(timeout);
+      clearTimeout(idleTimeout);
+      hardDeadlineWatchdog.kill('SIGTERM'); // cancel watchdog if container exited before deadline
       const duration = Date.now() - startTime;
 
       if (timedOut) {
@@ -442,11 +530,13 @@ export async function runContainerAgent(
             { group: group.name, containerName, duration, code },
             'Container timed out after output (idle cleanup)',
           );
+          // Never preserve session across container restarts — shared folder is the memory.
+          // Resuming a session carries accumulated WebSearch results that bloat token counts.
           outputChain.then(() => {
             resolve({
               status: 'success',
               result: null,
-              newSessionId,
+              newSessionId: undefined,
             });
           });
           return;
@@ -548,13 +638,14 @@ export async function runContainerAgent(
       if (onOutput) {
         outputChain.then(() => {
           logger.info(
-            { group: group.name, duration, newSessionId },
+            { group: group.name, duration },
             'Container completed (streaming mode)',
           );
+          // Never preserve session across container restarts — shared folder is the memory.
           resolve({
             status: 'success',
             result: null,
-            newSessionId,
+            newSessionId: undefined,
           });
         });
         return;
@@ -610,7 +701,8 @@ export async function runContainerAgent(
     });
 
     container.on('error', (err) => {
-      clearTimeout(timeout);
+      clearTimeout(idleTimeout);
+      hardDeadlineWatchdog.kill('SIGTERM');
       logger.error(
         { group: group.name, containerName, error: err },
         'Container spawn error',

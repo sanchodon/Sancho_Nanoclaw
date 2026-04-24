@@ -27,6 +27,10 @@ interface ContainerInput {
   isMain: boolean;
   isScheduledTask?: boolean;
   assistantName?: string;
+  model?: string;
+  allowedTools?: string[];
+  useLiteMode?: boolean;
+  minimalSystemPrompt?: boolean;
   secrets?: Record<string, string>;
 }
 
@@ -398,6 +402,16 @@ async function runQuery(
     globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
   }
 
+  // Load group CLAUDE.md into system prompt so persona/gender rules are strictly enforced
+  // (project-memory loading alone is not sufficient for strict behavioral rules)
+  const groupClaudeMdPath = '/workspace/group/CLAUDE.md';
+  if (fs.existsSync(groupClaudeMdPath)) {
+    const groupClaudeMd = fs.readFileSync(groupClaudeMdPath, 'utf-8');
+    globalClaudeMd = globalClaudeMd
+      ? `${groupClaudeMd}\n\n---\n\n${globalClaudeMd}`
+      : groupClaudeMd;
+  }
+
   // Discover additional directories mounted at /workspace/extra/*
   // These are passed to the SDK so their CLAUDE.md files are loaded automatically
   const extraDirs: string[] = [];
@@ -418,14 +432,17 @@ async function runQuery(
     prompt: stream,
     options: {
       cwd: '/workspace/group',
-      model: 'claude-haiku-4-5-20251001',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: (containerInput.model || 'claude-haiku-4-5-20251001') as any,
       additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
       resume: sessionId,
       resumeSessionAt: resumeAt,
-      systemPrompt: globalClaudeMd
-        ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
-        : undefined,
-      allowedTools: [
+      systemPrompt: containerInput.minimalSystemPrompt
+        ? (globalClaudeMd ?? undefined)
+        : (globalClaudeMd
+            ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
+            : undefined),
+      allowedTools: (containerInput.allowedTools ?? [
         'Bash',
         'Read', 'Write', 'Edit', 'Glob', 'Grep',
         'WebSearch', 'WebFetch',
@@ -434,7 +451,7 @@ async function runQuery(
         'TodoWrite', 'ToolSearch', 'Skill',
         'NotebookEdit',
         'mcp__nanoclaw__*'
-      ],
+      ]) as string[],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
@@ -448,6 +465,10 @@ async function runQuery(
             NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
           },
+        },
+        gmail: {
+          command: 'npx',
+          args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'],
         },
       },
       hooks: {
@@ -500,6 +521,13 @@ async function main(): Promise<void> {
     // Delete the temp file the entrypoint wrote — it contains secrets
     try { fs.unlinkSync('/tmp/input.json'); } catch { /* may not exist */ }
     log(`Received input for group: ${containerInput.groupFolder}`);
+
+    // Delegate to lite runner (direct API, no Claude Code SDK overhead)
+    if (containerInput.useLiteMode) {
+      const { runLite } = await import('./lite.js');
+      await runLite(containerInput);
+      return;
+    }
   } catch (err) {
     writeOutput({
       status: 'error',
