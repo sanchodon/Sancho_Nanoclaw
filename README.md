@@ -1,4 +1,4 @@
-# 🤖 NanoClaw — น้องอนันต์ ผู้ช่วยบัญชี AI สำหรับ SME ไทย
+# 🤖 NanoClaw — น้องอนันต์ ผู้ช่วยบัญชี AI, Maria ผู้ช่วยการตลาด ,Nadia ผู้ช่วยจัดซื้อ สำหรับ SME ไทย
 
 > ติดตั้งง่าย · ใช้ผ่าน LINE · ประหยัดสุดๆ · ไม่ต้องรู้โค้ด
 
@@ -10,7 +10,9 @@
 
 น้องอนันต์ (Anan) คือผู้ช่วยบัญชี AI ที่อยู่ใน LINE ของคุณ ส่งสลิปมา อนันต์จัดการให้หมด — จัดหมวดหมู่รายจ่าย บันทึกข้อมูล สรุปรายงานรายเดือน
 
-**ราคาต่อสลิป: ~40 สตางค์** (ถูกกว่าโปรแกรมบัญชีทั่วไป 30 เท่า)
+**ราคาต่อสลิป: ~ 20-40 สตางค์** (ถูกกว่าโปรแกรมบัญชีทั่วไป 30-40 เท่า)
+### Maria --- Marketing Expert ###
+### Nadia --- Purchasing Expert ###
 
 ### ทำอะไรได้บ้าง?
 
@@ -64,7 +66,7 @@ curl -fsSL https://gist.githubusercontent.com/sanchodon/2558bc7a9cae647e3619d40c
    LINE_CHANNEL_SECRET=your_secret
    ANTHROPIC_API_KEY=your_key
    ```
-2. เริ่ม Anan: `cd ~/nanoclaw && npm start`
+2. เริ่ม Anan/Maria/Nadia : `cd ~/nanoclaw && npm start`
 3. เปิด tunnel: `ngrok http 3000`
 4. ตั้ง Webhook URL ใน LINE Developer Console
 
@@ -74,9 +76,11 @@ curl -fsSL https://gist.githubusercontent.com/sanchodon/2558bc7a9cae647e3619d40c
 
 ### What is NanoClaw?
 
-NanoClaw is a self-hosted AI accounting assistant that lives in your LINE group. Send a payment slip, and Anan categorizes it, records it, and generates monthly reports — all automatically.
+NanoClaw is a self-hosted AI  assistants that live in your LINE group. Send a payment slip, and Anan categorizes it, records it, and generates monthly reports — all automatically.
 
-**Cost per transaction: ~฿0.002 (0.2 satang)** — 50x cheaper than typical accounting software subscriptions.
+**Cost per transaction: ~฿.20 - .40 ** — 30-40x cheaper than typical accounting software subscriptions.
+Maria -can help and consult in all marketing stratergy
+Nadia - can help and manage in purchasing process
 
 ### Features
 
@@ -107,7 +111,7 @@ LINE Messaging API
       ↓
    ngrok tunnel
       ↓
- Andy / Anan (Node.js on Mac)
+ Andy / Anan/Maria/Nadia (Node.js on Mac)
       ↓
  Anthropic API (Claude Haiku)
       ↓ (agent tasks, on demand)
@@ -118,9 +122,9 @@ LINE Messaging API
 
 | Component | Cost |
 |-----------|------|
-| LINE Official Account | Free (500 msg/month) |
+| LINE Official Account | Free (300 msg/month) |
 | ngrok | Free (static domain) |
-| Claude Haiku per slip | ~฿0.002 |
+| Claude Haiku per slip | ~฿0.20-40  |
 | Apple Container | Free (macOS built-in) |
 
 ---
@@ -128,7 +132,7 @@ LINE Messaging API
 ## 🙏 Credits
 
 - Original NanoClaw engine by [Gavriel](https://github.com/gavrielc/nanoclaw) — MIT License
-- LINE integration, Anan accounting persona, and cost optimization by [Don Sancho](https://github.com/sanchodon)
+- LINE integration, Nadia, Maria, Anan accounting persona , and cost optimization by [Don Sancho](https://github.com/sanchodon)
 
 ---
 
