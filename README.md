@@ -97,12 +97,7 @@ NanoClaw is a self-hosted AI accounting assistant that lives in your LINE group.
 ### Install
 
 ```bash
-curl -fsSL https://your-gist-url | bash
-```
-
-Developer mode (also installs Claude Code):
-```bash
-curl -fsSL https://your-gist-url | bash -s -- --dev
+curl -fsSL https://gist.githubusercontent.com/sanchodon/2558bc7a9cae647e3619d40c51c52b54/raw/install-nanoclaw.sh | bash
 ```
 
 ### Architecture
