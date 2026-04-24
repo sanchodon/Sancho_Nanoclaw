@@ -47,13 +47,14 @@
 **คำสั่งติดตั้ง (copy แล้ว paste ใน Terminal):**
 
 ```bash
-curl -fsSL https://your-gist-url | bash
+curl -fsSL https://gist.githubusercontent.com/sanchodon/2558bc7a9cae647e3619d40c51c52b54/raw/install-nanoclaw.sh | bash
 ```
 
-**สำหรับนักพัฒนา (ติดตั้ง Claude Code ด้วย):**
-```bash
-curl -fsSL https://your-gist-url | bash -s -- --dev
-```
+สิ่งที่จะถูกติดตั้งอัตโนมัติ:
+- Homebrew, Node.js, Git
+- Apple Container
+- NanoClaw (Anan · Maria · Nadia)
+- Claude Code CLI
 
 ### หลังติดตั้ง
 
