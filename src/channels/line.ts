@@ -40,7 +40,8 @@ export class LineChannel implements Channel {
   private connected = false;
   private server: http.Server | null = null;
   private servedFiles: Map<string, string> = new Map(); // token -> hostPath
-  private servedDownloads: Map<string, { hostPath: string; fileName: string }> = new Map(); // token -> {hostPath, fileName}
+  private servedDownloads: Map<string, { hostPath: string; fileName: string }> =
+    new Map(); // token -> {hostPath, fileName}
   private client: messagingApi.MessagingApiClient | null = null;
   private blobClient: messagingApi.MessagingApiBlobClient | null = null;
   private imageBaseUrl = LINE_IMAGE_PUBLIC_BASE_URL;
@@ -82,8 +83,18 @@ export class LineChannel implements Channel {
     this.opts = opts;
 
     // Register additional channels from env (LINE_MARIA_*, LINE_NADIA_*, etc.)
-    const extraSecrets = [env.LINE_MARIA_CHANNEL_SECRET, env.LINE_NADIA_CHANNEL_SECRET, env.LINE_ANAN_CHANNEL_SECRET, env.LINE_NUMFON_CHANNEL_SECRET].filter(Boolean);
-    const extraTokens = [env.LINE_MARIA_CHANNEL_ACCESS_TOKEN, env.LINE_NADIA_CHANNEL_ACCESS_TOKEN, env.LINE_ANAN_CHANNEL_ACCESS_TOKEN, env.LINE_NUMFON_CHANNEL_ACCESS_TOKEN].filter(Boolean);
+    const extraSecrets = [
+      env.LINE_MARIA_CHANNEL_SECRET,
+      env.LINE_NADIA_CHANNEL_SECRET,
+      env.LINE_ANAN_CHANNEL_SECRET,
+      env.LINE_NUMFON_CHANNEL_SECRET,
+    ].filter(Boolean);
+    const extraTokens = [
+      env.LINE_MARIA_CHANNEL_ACCESS_TOKEN,
+      env.LINE_NADIA_CHANNEL_ACCESS_TOKEN,
+      env.LINE_ANAN_CHANNEL_ACCESS_TOKEN,
+      env.LINE_NUMFON_CHANNEL_ACCESS_TOKEN,
+    ].filter(Boolean);
     this._extraChannelConfigs = extraSecrets.map((s, i) => ({
       secret: s!,
       accessToken: extraTokens[i] || '',
@@ -111,8 +122,12 @@ export class LineChannel implements Channel {
       if (cfg.secret && cfg.accessToken) {
         const sc: SubChannel = {
           secret: cfg.secret,
-          client: new messagingApi.MessagingApiClient({ channelAccessToken: cfg.accessToken }),
-          blobClient: new messagingApi.MessagingApiBlobClient({ channelAccessToken: cfg.accessToken }),
+          client: new messagingApi.MessagingApiClient({
+            channelAccessToken: cfg.accessToken,
+          }),
+          blobClient: new messagingApi.MessagingApiBlobClient({
+            channelAccessToken: cfg.accessToken,
+          }),
         };
         this.subChannels.push(sc);
         this.secretToSubChannel.set(cfg.secret, sc);
@@ -128,7 +143,10 @@ export class LineChannel implements Channel {
         const sc = this.secretToSubChannel.get(secret);
         if (sc) {
           this.chatClients.set(jid, sc);
-          logger.info({ jid, name: group.name }, 'Restored LINE sub-channel mapping for group');
+          logger.info(
+            { jid, name: group.name },
+            'Restored LINE sub-channel mapping for group',
+          );
         }
       }
     }
@@ -146,17 +164,24 @@ export class LineChannel implements Channel {
           }
           const ext = path.extname(filePath).toLowerCase();
           const contentType =
-            ext === '.png'  ? 'image/png' :
-            ext === '.gif'  ? 'image/gif' :
-            ext === '.webp' ? 'image/webp' :
-                              'image/jpeg';
+            ext === '.png'
+              ? 'image/png'
+              : ext === '.gif'
+                ? 'image/gif'
+                : ext === '.webp'
+                  ? 'image/webp'
+                  : 'image/jpeg';
           res.writeHead(200, { 'Content-Type': contentType });
           fs.createReadStream(filePath).pipe(res);
           return;
         }
 
         // File download page: GET /files/:token → HTML auto-download page
-        if (req.method === 'GET' && req.url?.startsWith('/files/') && !req.url.startsWith('/files-raw/')) {
+        if (
+          req.method === 'GET' &&
+          req.url?.startsWith('/files/') &&
+          !req.url.startsWith('/files-raw/')
+        ) {
           const token = req.url.slice('/files/'.length);
           const entry = token ? this.servedDownloads.get(token) : undefined;
           if (!entry || !fs.existsSync(entry.hostPath)) {
@@ -200,10 +225,13 @@ download();
           }
           const ext = path.extname(entry.fileName).toLowerCase();
           const contentType =
-            ext === '.xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
-            ext === '.csv'  ? 'text/csv' :
-            ext === '.pdf'  ? 'application/pdf' :
-            'application/octet-stream';
+            ext === '.xlsx'
+              ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+              : ext === '.csv'
+                ? 'text/csv'
+                : ext === '.pdf'
+                  ? 'application/pdf'
+                  : 'application/octet-stream';
           res.writeHead(200, {
             'Content-Type': contentType,
             'Content-Disposition': `attachment; filename="${entry.fileName}"`,
@@ -316,7 +344,10 @@ download();
     }
   }
 
-  private async handleEvents(body: webhook.CallbackRequest, subChannel: SubChannel | null = null): Promise<void> {
+  private async handleEvents(
+    body: webhook.CallbackRequest,
+    subChannel: SubChannel | null = null,
+  ): Promise<void> {
     for (const event of body.events) {
       // Log every event unconditionally for debugging
       logger.info(
@@ -352,10 +383,14 @@ download();
           }
           const nameList = names.length > 0 ? names.join(', ') : 'สมาชิกใหม่';
           const welcomeText = `ยินดีต้อนรับ ${nameList} เข้ากลุ่ม${particle}! 👋`;
-          activeClient.replyMessage({
-            replyToken: joinEvent.replyToken,
-            messages: [{ type: 'text', text: welcomeText }],
-          }).catch((err) => logger.warn({ err }, 'Failed to send member welcome'));
+          activeClient
+            .replyMessage({
+              replyToken: joinEvent.replyToken,
+              messages: [{ type: 'text', text: welcomeText }],
+            })
+            .catch((err) =>
+              logger.warn({ err }, 'Failed to send member welcome'),
+            );
           logger.info({ groupJid, names }, 'Sent member welcome message');
         }
         continue;
@@ -372,7 +407,8 @@ download();
       const activeClient = subChannel?.client ?? this.client;
 
       const { type: msgType } = msgEvent.message;
-      if (msgType !== 'text' && msgType !== 'image' && msgType !== 'file') continue;
+      if (msgType !== 'text' && msgType !== 'image' && msgType !== 'file')
+        continue;
 
       const source = msgEvent.source;
       if (!source) continue;
@@ -409,12 +445,21 @@ download();
       let groups = this.opts.registeredGroups();
       if (!groups[chatJid]) {
         // Auto-register 1-on-1 DMs for sub-channels (e.g. Maria_Marketer, Nadia)
-        if (subChannel && source.type === 'user' && this.opts.onAutoRegisterDM) {
+        if (
+          subChannel &&
+          source.type === 'user' &&
+          this.opts.onAutoRegisterDM
+        ) {
           this.opts.onAutoRegisterDM(chatJid, subChannel.secret);
           groups = this.opts.registeredGroups(); // re-fetch after registration
         }
         // Auto-register group chats for sub-channels
-        if (!groups[chatJid] && subChannel && (source.type === 'group' || source.type === 'room') && this.opts.onAutoRegisterGroup) {
+        if (
+          !groups[chatJid] &&
+          subChannel &&
+          (source.type === 'group' || source.type === 'room') &&
+          this.opts.onAutoRegisterGroup
+        ) {
           this.opts.onAutoRegisterGroup(chatJid, subChannel.secret);
           groups = this.opts.registeredGroups(); // re-fetch after registration
         }
@@ -545,7 +590,11 @@ download();
     messageId: string,
     fileName: string,
     groupFolder: string,
-    subChannel?: { client: messagingApi.MessagingApiClient; blobClient: messagingApi.MessagingApiBlobClient; secret: string } | null,
+    subChannel?: {
+      client: messagingApi.MessagingApiClient;
+      blobClient: messagingApi.MessagingApiBlobClient;
+      secret: string;
+    } | null,
   ): Promise<string | null> {
     const activeBlobClient = subChannel?.blobClient ?? this.blobClient;
     if (!activeBlobClient) {
@@ -596,10 +645,7 @@ download();
 
     // Try free reply API first (60-second window)
     const replyTokenData = this.replyTokens.get(jid);
-    if (
-      replyTokenData &&
-      replyTokenData.expiresAt > Date.now()
-    ) {
+    if (replyTokenData && replyTokenData.expiresAt > Date.now()) {
       logger.debug(
         { jid, length: payload.length },
         'Sending LINE reply message (FREE)',
@@ -717,8 +763,19 @@ download();
             type: 'box' as const,
             layout: 'vertical' as const,
             contents: [
-              { type: 'text' as const, text: '📊 รายงาน Excel', weight: 'bold' as const, size: 'lg' as const },
-              { type: 'text' as const, text: fileName, size: 'sm' as const, color: '#888888', wrap: true },
+              {
+                type: 'text' as const,
+                text: '📊 รายงาน Excel',
+                weight: 'bold' as const,
+                size: 'lg' as const,
+              },
+              {
+                type: 'text' as const,
+                text: fileName,
+                size: 'sm' as const,
+                color: '#888888',
+                wrap: true,
+              },
             ],
           },
           footer: {
@@ -742,9 +799,15 @@ download();
       const replyTokenData = this.replyTokens.get(jid);
       if (replyTokenData && replyTokenData.expiresAt > Date.now()) {
         try {
-          await activeClient.replyMessage({ replyToken: replyTokenData.token, messages: [flexMessage] });
+          await activeClient.replyMessage({
+            replyToken: replyTokenData.token,
+            messages: [flexMessage],
+          });
           this.replyTokens.delete(jid);
-          logger.info({ jid, fileName }, 'LINE download button sent via reply (FREE)');
+          logger.info(
+            { jid, fileName },
+            'LINE download button sent via reply (FREE)',
+          );
           return;
         } catch {
           this.replyTokens.delete(jid);
@@ -775,14 +838,8 @@ download();
 
     // Try free reply API first (60-second window)
     const replyTokenData = this.replyTokens.get(jid);
-    if (
-      replyTokenData &&
-      replyTokenData.expiresAt > Date.now()
-    ) {
-      logger.debug(
-        { jid, localPath },
-        'Sending LINE image via reply (FREE)',
-      );
+    if (replyTokenData && replyTokenData.expiresAt > Date.now()) {
+      logger.debug({ jid, localPath }, 'Sending LINE image via reply (FREE)');
       try {
         await activeClient.replyMessage({
           replyToken: replyTokenData.token,
@@ -809,10 +866,7 @@ download();
 
     try {
       await activeClient.pushMessage({ to: jid, messages });
-      logger.info(
-        { jid, localPath },
-        'LINE image sent via push (costs quota)',
-      );
+      logger.info({ jid, localPath }, 'LINE image sent via push (costs quota)');
     } catch (err) {
       this.servedFiles.delete(token);
       logger.error({ jid, localPath, err }, 'Failed to send LINE image');

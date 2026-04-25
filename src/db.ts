@@ -311,7 +311,8 @@ export function getNewMessages(
 
   let newCursor = lastCursor;
   for (const row of rows) {
-    if ((row.rowid ?? 0) > (parseInt(newCursor, 10) || 0)) newCursor = String(row.rowid!);
+    if ((row.rowid ?? 0) > (parseInt(newCursor, 10) || 0))
+      newCursor = String(row.rowid!);
   }
 
   return { messages: rows, newTimestamp: newCursor };
@@ -344,7 +345,9 @@ export function migrateTimestampCursor(cursor: string): string {
   if (!cursor || /^\d+$/.test(cursor)) return cursor; // already rowid or empty
   // Find max rowid of messages with timestamp <= the stored ISO timestamp
   const row = db
-    .prepare(`SELECT MAX(rowid) AS max_rowid FROM messages WHERE timestamp <= ?`)
+    .prepare(
+      `SELECT MAX(rowid) AS max_rowid FROM messages WHERE timestamp <= ?`,
+    )
     .get(cursor) as { max_rowid: number | null };
   return row?.max_rowid ? String(row.max_rowid) : '0';
 }

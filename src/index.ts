@@ -113,7 +113,10 @@ function loadState(): void {
   const rawTimestamp = getRouterState('last_timestamp') || '';
   lastTimestamp = migrateTimestampCursor(rawTimestamp);
   if (lastTimestamp !== rawTimestamp) {
-    logger.info({ from: rawTimestamp, to: lastTimestamp }, 'Migrated last_timestamp cursor to rowid');
+    logger.info(
+      { from: rawTimestamp, to: lastTimestamp },
+      'Migrated last_timestamp cursor to rowid',
+    );
   }
 
   const agentTs = getRouterState('last_agent_timestamp');
@@ -124,7 +127,10 @@ function loadState(): void {
     for (const [jid, cursor] of Object.entries(parsed)) {
       const migrated = migrateTimestampCursor(cursor as string);
       if (migrated !== cursor) {
-        logger.info({ jid, from: cursor, to: migrated }, 'Migrated lastAgentTimestamp cursor to rowid');
+        logger.info(
+          { jid, from: cursor, to: migrated },
+          'Migrated lastAgentTimestamp cursor to rowid',
+        );
       }
       lastAgentTimestamp[jid] = migrated;
     }
@@ -664,7 +670,11 @@ async function processReceiptsFromMessages(
     receiptBatchBuffer.set(chatJid, [...existing, ...imagesToProcess]);
 
     logger.info(
-      { chatJid, newImages: imagesToProcess.length, totalInBatch: receiptBatchBuffer.get(chatJid)!.length },
+      {
+        chatJid,
+        newImages: imagesToProcess.length,
+        totalInBatch: receiptBatchBuffer.get(chatJid)!.length,
+      },
       'Images added to batch buffer, scheduling batch processing',
     );
 
@@ -711,7 +721,14 @@ async function processBatchReceipts(
     'Processing batched receipts',
   );
 
-  const results: { success: boolean; amount?: number; date?: string; memo?: string; category?: string; error?: string }[] = [];
+  const results: {
+    success: boolean;
+    amount?: number;
+    date?: string;
+    memo?: string;
+    category?: string;
+    error?: string;
+  }[] = [];
   let processedCount = 0;
 
   for (const pendingReceipt of batch) {
@@ -720,7 +737,10 @@ async function processBatchReceipts(
       const imageBuffer = fs.readFileSync(pendingReceipt.filePath);
       const imageBase64 = imageBuffer.toString('base64');
 
-      logger.info({ filePath: pendingReceipt.filePath }, 'Processing receipt from batch');
+      logger.info(
+        { filePath: pendingReceipt.filePath },
+        'Processing receipt from batch',
+      );
 
       try {
         // Spawn receipt agent container
@@ -773,24 +793,110 @@ async function processBatchReceipts(
 
           // Check for keyword match
           const keywordMap = [
-            { words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'], category: '#อาหาร' },
-            { words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'], category: '#เครื่องดื่ม' },
-            { words: ['รถ', 'น้ำมัน', 'gas', 'taxi', 'travel', 'ที่จอด', 'parking'], category: '#การเดินทาง' },
-            { words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'], category: '#ค่าเช่า' },
-            { words: ['แรง', 'เงินเดือน', 'จ้าง', 'wage', 'salary', 'นาย', 'นาง', 'น.ส.', 'staff'], category: '#ค่าแรง' },
-            { words: ['ไฟ', 'เน็ต', 'bill', 'utility', 'mea', 'ประเมา', 'true', 'ais'], category: '#ค่าน้ำไฟ' },
-            { words: ['ของ', 'ซื้อ', 'วัสดุ', 'supply', 'stock', 'equipment', 'tool'], category: '#อุปกรณ์' },
-            { words: ['โฆษณา', 'เพจ', 'ad', 'ads', 'marketing', 'facebook', 'google'], category: '#การตลาด' },
-            { words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'], category: '#ภาษี' },
-            { words: ['ส่วนตัว', 'ใช้เอง', 'personal', 'gift', 'ของขวัญ', 'wallet'], category: '#ส่วนตัว' },
+            {
+              words: ['กิน', 'อาหาร', 'ข้าว', 'food', 'eat', 'ร้าน', 'shop'],
+              category: '#อาหาร',
+            },
+            {
+              words: ['น้ำ', 'กาแฟ', 'coffee', 'drink', 'cafe', 'ชา', 'tea'],
+              category: '#เครื่องดื่ม',
+            },
+            {
+              words: [
+                'รถ',
+                'น้ำมัน',
+                'gas',
+                'taxi',
+                'travel',
+                'ที่จอด',
+                'parking',
+              ],
+              category: '#การเดินทาง',
+            },
+            {
+              words: ['เช่า', 'หอ', 'ห้อง', 'rent', 'room', 'receipt', 'บ้าน'],
+              category: '#ค่าเช่า',
+            },
+            {
+              words: [
+                'แรง',
+                'เงินเดือน',
+                'จ้าง',
+                'wage',
+                'salary',
+                'นาย',
+                'นาง',
+                'น.ส.',
+                'staff',
+              ],
+              category: '#ค่าแรง',
+            },
+            {
+              words: [
+                'ไฟ',
+                'เน็ต',
+                'bill',
+                'utility',
+                'mea',
+                'ประเมา',
+                'true',
+                'ais',
+              ],
+              category: '#ค่าน้ำไฟ',
+            },
+            {
+              words: [
+                'ของ',
+                'ซื้อ',
+                'วัสดุ',
+                'supply',
+                'stock',
+                'equipment',
+                'tool',
+              ],
+              category: '#อุปกรณ์',
+            },
+            {
+              words: [
+                'โฆษณา',
+                'เพจ',
+                'ad',
+                'ads',
+                'marketing',
+                'facebook',
+                'google',
+              ],
+              category: '#การตลาด',
+            },
+            {
+              words: ['ภาษี', 'tax', 'vat', 'sso', 'ประกันสังคม'],
+              category: '#ภาษี',
+            },
+            {
+              words: [
+                'ส่วนตัว',
+                'ใช้เอง',
+                'personal',
+                'gift',
+                'ของขวัญ',
+                'wallet',
+              ],
+              category: '#ส่วนตัว',
+            },
           ];
 
           let matchedCategory = '';
           if (memoText) {
-            const cleanedMemo = memoText.toLowerCase().replace(/^บันทึก\s*/i, '').trim();
+            const cleanedMemo = memoText
+              .toLowerCase()
+              .replace(/^บันทึก\s*/i, '')
+              .trim();
             for (const group of keywordMap) {
               for (const word of group.words) {
-                if (cleanedMemo.startsWith(word.toLowerCase()) || cleanedMemo.includes(' ' + word.toLowerCase())) {
+                if (
+                  cleanedMemo.startsWith(word.toLowerCase()) ||
+                  cleanedMemo.includes(' ' + word.toLowerCase())
+                ) {
                   matchedCategory = group.category;
                   break;
                 }
@@ -804,9 +910,11 @@ async function processBatchReceipts(
           if (result.ref_no && processedRefNumbers.has(result.ref_no)) {
             isDuplicate = true;
           } else if (!result.ref_no) {
-            const recentMatch = recentReceipts.find((r) =>
-              r.date === validatedDate && Math.abs(r.amount - result.amount) === 0 &&
-              r.timestamp > Date.now() - 3600000
+            const recentMatch = recentReceipts.find(
+              (r) =>
+                r.date === validatedDate &&
+                Math.abs(r.amount - result.amount) === 0 &&
+                r.timestamp > Date.now() - 3600000,
             );
             isDuplicate = !!recentMatch;
           }
@@ -891,7 +999,9 @@ async function processBatchReceipts(
   // Send consolidated reply with all results
   if (results.length > 0) {
     let summary = '📋 ผลการประมวลผลสลิป:\n\n';
-    let autoRecorded = 0, pendingReview = 0, failed = 0;
+    let autoRecorded = 0,
+      pendingReview = 0,
+      failed = 0;
 
     for (const result of results) {
       if (!result.success) {
@@ -944,7 +1054,13 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   if (missedMessages.length === 0) return true;
 
   // Process this batch, then check for any new messages that arrived during processing
-  const success = await processMessageBatch(chatJid, group, channel, isMainGroup, missedMessages);
+  const success = await processMessageBatch(
+    chatJid,
+    group,
+    channel,
+    isMainGroup,
+    missedMessages,
+  );
 
   if (success) {
     // After processing a batch, immediately check if new messages arrived
@@ -972,28 +1088,52 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
  * Called both from processMessageBatch (normal path) and the piping path in
  * startMessageLoop so that piped images are tracked for future duplicate detection.
  */
-function saveImageHashesForMessages(messages: NewMessage[], groupFolder: string): void {
-  const hashFile = path.join(resolveGroupFolderPath(groupFolder), '.processed-image-hashes.json');
+function saveImageHashesForMessages(
+  messages: NewMessage[],
+  groupFolder: string,
+): void {
+  const hashFile = path.join(
+    resolveGroupFolderPath(groupFolder),
+    '.processed-image-hashes.json',
+  );
   let processedHashes: string[] = [];
-  try { processedHashes = JSON.parse(fs.readFileSync(hashFile, 'utf-8')); } catch { /* no file yet */ }
+  try {
+    processedHashes = JSON.parse(fs.readFileSync(hashFile, 'utf-8'));
+  } catch {
+    /* no file yet */
+  }
 
   const newHashes: string[] = [];
   for (const m of messages) {
     const match = m.content.match(/\[image:\s*([^\]]+)\]/);
     if (!match) continue;
-    const imagePath = match[1].trim().replace('/workspace/group', resolveGroupFolderPath(groupFolder));
+    const imagePath = match[1]
+      .trim()
+      .replace('/workspace/group', resolveGroupFolderPath(groupFolder));
     try {
-      const hash = crypto.createHash('md5').update(fs.readFileSync(imagePath)).digest('hex');
+      const hash = crypto
+        .createHash('md5')
+        .update(fs.readFileSync(imagePath))
+        .digest('hex');
       if (!processedHashes.includes(hash) && !newHashes.includes(hash)) {
         newHashes.push(hash);
       }
-    } catch { /* file unreadable — skip */ }
+    } catch {
+      /* file unreadable — skip */
+    }
   }
 
   if (newHashes.length > 0) {
     const updated = [...processedHashes, ...newHashes].slice(-200);
-    try { fs.writeFileSync(hashFile, JSON.stringify(updated)); } catch { /* ignore */ }
-    logger.debug({ groupFolder, count: newHashes.length }, 'Saved image hashes for future dedup');
+    try {
+      fs.writeFileSync(hashFile, JSON.stringify(updated));
+    } catch {
+      /* ignore */
+    }
+    logger.debug(
+      { groupFolder, count: newHashes.length },
+      'Saved image hashes for future dedup',
+    );
   }
 }
 
@@ -1008,7 +1148,6 @@ async function processMessageBatch(
   isMainGroup: boolean,
   missedMessages: NewMessage[],
 ): Promise<boolean> {
-
   // For receipts in main group: try to extract before sending to main agent
   const receiptsProcessed = await processReceiptsFromMessages(
     missedMessages,
@@ -1025,26 +1164,47 @@ async function processMessageBatch(
   // This prevents paying for duplicate base64 image tokens (~4-8K tokens per image)
   const originalMissedMessages = missedMessages;
   if (useLiteRunner) {
-    const hashFile = path.join(resolveGroupFolderPath(group.folder), '.processed-image-hashes.json');
+    const hashFile = path.join(
+      resolveGroupFolderPath(group.folder),
+      '.processed-image-hashes.json',
+    );
     let processedHashes: string[] = [];
-    try { processedHashes = JSON.parse(fs.readFileSync(hashFile, 'utf-8')); } catch { /* no file yet */ }
+    try {
+      processedHashes = JSON.parse(fs.readFileSync(hashFile, 'utf-8'));
+    } catch {
+      /* no file yet */
+    }
 
     const deduped = missedMessages.filter((m) => {
       const match = m.content.match(/\[image:\s*([^\]]+)\]/);
       if (!match) return true; // Not an image message — always keep
-      const imagePath = match[1].trim().replace('/workspace/group', resolveGroupFolderPath(group.folder));
+      const imagePath = match[1]
+        .trim()
+        .replace('/workspace/group', resolveGroupFolderPath(group.folder));
       try {
-        const hash = crypto.createHash('md5').update(fs.readFileSync(imagePath)).digest('hex');
+        const hash = crypto
+          .createHash('md5')
+          .update(fs.readFileSync(imagePath))
+          .digest('hex');
         if (processedHashes.includes(hash)) {
-          logger.info({ group: group.name, imagePath }, 'Duplicate image — skipping (already processed)');
+          logger.info(
+            { group: group.name, imagePath },
+            'Duplicate image — skipping (already processed)',
+          );
           return false;
         }
         // Resize image to 400px wide to reduce base64 token cost (~6x fewer tokens)
         try {
-          execSyncFn(`sips --resampleWidth 400 "${imagePath}" 2>/dev/null`, { timeout: 5000 });
-        } catch { /* resize failed — use original */ }
+          execSyncFn(`sips --resampleWidth 400 "${imagePath}" 2>/dev/null`, {
+            timeout: 5000,
+          });
+        } catch {
+          /* resize failed — use original */
+        }
         return true;
-      } catch { return true; } // Can't read file — let it through
+      } catch {
+        return true;
+      } // Can't read file — let it through
     });
 
     // Persist hashes for all new (non-duplicate) images
@@ -1055,8 +1215,9 @@ async function processMessageBatch(
 
   // Notify about duplicates (partial or full) and handle fully-duplicate batches
   if (useLiteRunner) {
-    const dupCount = originalMissedMessages.filter(m => m.content.match(/\[image:/)).length
-      - missedMessages.filter(m => m.content.match(/\[image:/)).length;
+    const dupCount =
+      originalMissedMessages.filter((m) => m.content.match(/\[image:/)).length -
+      missedMessages.filter((m) => m.content.match(/\[image:/)).length;
 
     if (dupCount > 0 && channel) {
       await channel.sendMessage(
@@ -1067,10 +1228,14 @@ async function processMessageBatch(
 
     // If ALL images were duplicates, nothing left to process
     if (missedMessages.length === 0 && originalMissedMessages.length > 0) {
-      lastAgentTimestamp[chatJid] =
-        String(originalMissedMessages[originalMissedMessages.length - 1].rowid!);
+      lastAgentTimestamp[chatJid] = String(
+        originalMissedMessages[originalMissedMessages.length - 1].rowid!,
+      );
       saveState();
-      logger.info({ group: group.name }, 'All images were duplicates — skipping agent call');
+      logger.info(
+        { group: group.name },
+        'All images were duplicates — skipping agent call',
+      );
       return true;
     }
   }
@@ -1104,7 +1269,10 @@ async function processMessageBatch(
 
     if (selectedCategories.length > 0) {
       logger.info(
-        { categoriesCount: selectedCategories.length, pending: pendingCategorySelections.length },
+        {
+          categoriesCount: selectedCategories.length,
+          pending: pendingCategorySelections.length,
+        },
         '✅ User sent category selections',
       );
 
@@ -1112,7 +1280,10 @@ async function processMessageBatch(
       for (const selectedCategory of selectedCategories) {
         if (pendingCategorySelections.length === 0) {
           logger.warn(
-            { extraCategories: selectedCategories.length - categorizedReceiptsForSancho.length },
+            {
+              extraCategories:
+                selectedCategories.length - categorizedReceiptsForSancho.length,
+            },
             '⚠️ More category selections than pending receipts',
           );
           break;
@@ -1151,7 +1322,10 @@ async function processMessageBatch(
   }
 
   // If we have categorized receipts, add them as synthetic messages for Sancho to record
-  if (categorizedReceiptsForSancho.length > 0 && nonImageMessages.length === 0) {
+  if (
+    categorizedReceiptsForSancho.length > 0 &&
+    nonImageMessages.length === 0
+  ) {
     for (const cr of categorizedReceiptsForSancho) {
       const r = cr.receipt;
       const categoryName = cr.category.replace('#', '');
@@ -1177,8 +1351,9 @@ async function processMessageBatch(
   // If only image messages were processed, mark cursor and return (skip main agent)
   // Lite runner groups always process messages (images included above)
   if (!useLiteRunner && nonImageMessages.length === 0) {
-    lastAgentTimestamp[chatJid] =
-      String(missedMessages[missedMessages.length - 1].rowid!);
+    lastAgentTimestamp[chatJid] = String(
+      missedMessages[missedMessages.length - 1].rowid!,
+    );
     saveState();
     logger.info(
       { group: group.name },
@@ -1201,8 +1376,9 @@ async function processMessageBatch(
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
   const previousCursor = lastAgentTimestamp[chatJid] || '';
-  lastAgentTimestamp[chatJid] =
-    String(missedMessages[missedMessages.length - 1].rowid!);
+  lastAgentTimestamp[chatJid] = String(
+    missedMessages[missedMessages.length - 1].rowid!,
+  );
   saveState();
 
   logger.info(
@@ -1448,8 +1624,9 @@ async function startMessageLoop(): Promise<void> {
             if (group.containerConfig?.useLiteRunner) {
               saveImageHashesForMessages(messagesToSend, group.folder);
             }
-            lastAgentTimestamp[chatJid] =
-              String(messagesToSend[messagesToSend.length - 1].rowid!);
+            lastAgentTimestamp[chatJid] = String(
+              messagesToSend[messagesToSend.length - 1].rowid!,
+            );
             saveState();
             // Show typing indicator while the container processes the piped message
             channel
@@ -1526,7 +1703,10 @@ async function main(): Promise<void> {
         (g) => g.containerConfig?.lineChannelSecret === lineChannelSecret,
       );
       if (!template) {
-        logger.warn({ chatJid, lineChannelSecret }, 'No template group found for DM auto-registration');
+        logger.warn(
+          { chatJid, lineChannelSecret },
+          'No template group found for DM auto-registration',
+        );
         return;
       }
       // Generate an isolated folder name from the userId (e.g. maria-u774f16a)
@@ -1548,7 +1728,10 @@ async function main(): Promise<void> {
         requiresTrigger: false, // 1-on-1 DM: no trigger word needed
       };
       registerGroup(chatJid, newGroup);
-      logger.info({ chatJid, folder, templateFolder: template.folder }, 'Auto-registered 1-on-1 DM');
+      logger.info(
+        { chatJid, folder, templateFolder: template.folder },
+        'Auto-registered 1-on-1 DM',
+      );
     },
     onAutoRegisterGroup: (chatJid: string, lineChannelSecret: string) => {
       // Find the template group that owns this LINE sub-channel
@@ -1556,7 +1739,10 @@ async function main(): Promise<void> {
         (g) => g.containerConfig?.lineChannelSecret === lineChannelSecret,
       );
       if (!template) {
-        logger.warn({ chatJid, lineChannelSecret }, 'No template group found for group auto-registration');
+        logger.warn(
+          { chatJid, lineChannelSecret },
+          'No template group found for group auto-registration',
+        );
         return;
       }
       // Generate an isolated folder name from the group ID (e.g. nadia-ced01b891)
@@ -1578,7 +1764,10 @@ async function main(): Promise<void> {
         requiresTrigger: template.requiresTrigger,
       };
       registerGroup(chatJid, newGroup);
-      logger.info({ chatJid, folder, templateFolder: template.folder }, 'Auto-registered LINE group');
+      logger.info(
+        { chatJid, folder, templateFolder: template.folder },
+        'Auto-registered LINE group',
+      );
     },
   };
 

@@ -86,8 +86,11 @@ export function getGroupAssistantName(group: {
  * ASCII triggers use word boundaries; non-ASCII (Thai etc.) use substring match.
  */
 export function getGroupTriggerPattern(trigger: string): RegExp {
-  const parts = trigger.split('|').map(t => t.trim()).filter(Boolean);
-  const patterns = parts.map(p => {
+  const parts = trigger
+    .split('|')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const patterns = parts.map((p) => {
     const escaped = escapeRegex(p);
     return /^[\x00-\x7F]+$/.test(p) ? `\\b${escaped}\\b` : escaped;
   });

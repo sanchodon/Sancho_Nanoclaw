@@ -197,7 +197,10 @@ function buildVolumeMounts(
     'agent-runner-src',
   );
   if (fs.existsSync(agentRunnerSrc)) {
-    fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true, force: true });
+    fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, {
+      recursive: true,
+      force: true,
+    });
   }
   mounts.push({
     hostPath: groupAgentRunnerDir,
@@ -290,28 +293,41 @@ export async function runContainerAgent(
 
   // For non-lite agents: inject shared folder contents into the prompt automatically.
   // Lite runner handles this itself inside the container; SDK agents need it prepended here.
-  if (!group.containerConfig?.useLiteRunner && group.containerConfig?.additionalMounts) {
+  if (
+    !group.containerConfig?.useLiteRunner &&
+    group.containerConfig?.additionalMounts
+  ) {
     const INJECTABLE_EXTENSIONS = ['.txt', '.json', '.md'];
     const sharedSections: string[] = [];
     for (const mount of group.containerConfig.additionalMounts) {
       const hostPath = mount.hostPath.replace(/^~/, process.env.HOME || '');
-      const containerPath = mount.containerPath || path.basename(mount.hostPath);
+      const containerPath =
+        mount.containerPath || path.basename(mount.hostPath);
       try {
-        const files = fs.readdirSync(hostPath).filter(f => {
+        const files = fs.readdirSync(hostPath).filter((f) => {
           const ext = path.extname(f).toLowerCase();
           return INJECTABLE_EXTENSIONS.includes(ext) && !f.startsWith('.');
         });
         for (const fname of files) {
           try {
-            const content = fs.readFileSync(path.join(hostPath, fname), 'utf-8').trim();
+            const content = fs
+              .readFileSync(path.join(hostPath, fname), 'utf-8')
+              .trim();
             sharedSections.push(`[shared/${fname}]\n${content}`);
-          } catch { /* ignore unreadable files */ }
+          } catch {
+            /* ignore unreadable files */
+          }
         }
-      } catch { /* mount not accessible yet */ }
+      } catch {
+        /* mount not accessible yet */
+      }
       if (sharedSections.length > 0) {
         const sharedBlock = `\n\n---\n## SHARED FOLDER (/workspace/extra/${containerPath})\nThe following files are shared with all agents. You can read or update them using your file tools.\n\n${sharedSections.join('\n\n')}\n---\n`;
         input = { ...input, prompt: sharedBlock + input.prompt };
-        logger.debug({ group: group.name, files: sharedSections.length }, 'Injected shared folder into prompt');
+        logger.debug(
+          { group: group.name, files: sharedSections.length },
+          'Injected shared folder into prompt',
+        );
       }
     }
   }
@@ -452,7 +468,8 @@ export async function runContainerAgent(
     // graceful _close sentinel has time to trigger before the hard kill fires.
     const idleTimeoutMs = Math.max(configTimeout, IDLE_TIMEOUT + 30_000);
     // Hard wall-clock cap — cannot be reset by activity. Prevents runaway containers.
-    const hardTimeoutMs = group.containerConfig?.timeout || CONTAINER_HARD_TIMEOUT;
+    const hardTimeoutMs =
+      group.containerConfig?.timeout || CONTAINER_HARD_TIMEOUT;
 
     let hardDeadlineFired = false;
     const killOnTimeout = (reason: string) => {
