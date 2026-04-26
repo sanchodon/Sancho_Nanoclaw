@@ -54,7 +54,7 @@ curl -fsSL https://gist.githubusercontent.com/sanchodon/2558bc7a9cae647e3619d40c
 
 สิ่งที่จะถูกติดตั้งอัตโนมัติ:
 - Homebrew, Node.js, Git
-- Apple Container
+- Apple Container,ngrok
 - NanoClaw (Anan · Maria · Nadia)
 - Claude Code CLI
 
