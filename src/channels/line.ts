@@ -105,9 +105,10 @@ export class LineChannel implements Channel {
 
   async connect(): Promise<void> {
     if (!this.channelSecret || !this.channelAccessToken) {
-      throw new Error(
-        'LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN must be set in .env',
+      logger.warn(
+        'LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN not set — LINE channel disabled. Add them to .env and restart.',
       );
+      return;
     }
 
     this.client = new messagingApi.MessagingApiClient({
