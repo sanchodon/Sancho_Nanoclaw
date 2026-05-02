@@ -326,16 +326,27 @@ else
 fi
 
 # ====================================================
-step "9 - Check ngrok"
+step "9 - Install ngrok"
 # ====================================================
+# ngrok creates a public HTTPS tunnel so LINE can reach NanoClaw on your Mac.
+# One free static domain per account — the webhook URL never changes.
 
 if command -v ngrok &>/dev/null; then
-  ok "ngrok found - LINE -> ngrok -> localhost:$NANOCLAW_PORT -> NanoClaw"
+  ok "ngrok already installed ($(ngrok version 2>/dev/null | head -1))"
 else
-  warn "ngrok not found - install before using:"
-  info "  brew install ngrok/ngrok/ngrok"
-  info "  ngrok config add-authtoken <YOUR_TOKEN>"
+  info "Installing ngrok..."
+  brew install ngrok/ngrok/ngrok || fail "ngrok install failed"
+  ok "ngrok installed"
 fi
+
+echo ""
+echo -e "  ${YELLOW}ngrok setup required (one-time):${NC}"
+echo -e "  1. Sign up free at ${BLUE}https://ngrok.com${NC}"
+echo -e "  2. Copy your authtoken from: Dashboard → Getting Started → Your Authtoken"
+echo -e "  3. Run: ${BLUE}ngrok config add-authtoken YOUR_TOKEN${NC}"
+echo -e "  4. Get your free static domain: Dashboard → Cloud Edge → Domains → New Domain"
+echo -e "  5. Tell Claude your domain — Claude will start the tunnel for you"
+echo ""
 
 # ====================================================
 step "10 - Install Claude Code CLI (Developer Mode)"
@@ -384,10 +395,11 @@ echo ""
 echo -e "  2. Agents auto-start on login - or start now:"
 echo -e "     ${BLUE}launchctl kickstart -k gui/\$(id -u)/com.nanoclaw${NC}"
 echo ""
-echo -e "  3. Open ngrok tunnel (new terminal):"
-echo -e "     ${BLUE}ngrok http $NANOCLAW_PORT${NC}"
+echo -e "  3. Start ngrok tunnel (tell Claude your static domain):"
+echo -e "     ${BLUE}ngrok http --domain=YOUR_STATIC_DOMAIN.ngrok-free.app $NANOCLAW_PORT${NC}"
 echo ""
-echo -e "  4. Set Webhook URL in LINE Developer Console"
+echo -e "  4. Set Webhook URL in LINE Developer Console:"
+echo -e "     ${BLUE}https://YOUR_STATIC_DOMAIN.ngrok-free.app/webhook${NC}"
 echo ""
 echo -e "  5. Add your LINE bot to a group and mention an agent by name:"
 echo -e "     ${CYAN}Anan${NC}  or ${CYAN}อนันต์${NC}   — SME Accounting"
